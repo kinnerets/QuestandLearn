@@ -28,6 +28,7 @@ export const SUBJECT_LABEL: Record<string, string> = {
   neuroplasticity: 'גמישות מוחית',
   financial_literacy: 'חינוך פיננסי',
   seasonal: 'עונתי',
+  gifted: 'מחוננים',
   leadership: 'מנהיגות',
 };
 
@@ -77,6 +78,6 @@ export const SUBJECT_KIND: Record<string, 'core' | 'lang' | 'future' | 'lead'> =
   economics: 'future', fashion: 'future', politics: 'future', ai: 'future', philosophy: 'future',
   metacognition: 'future', geopolitics: 'future', cognitive_bias: 'future', epigenetics: 'future',
   procrastination: 'future', decision_making: 'future', neuroplasticity: 'future', financial_literacy: 'future',
-  seasonal: 'future',
+  seasonal: 'future', gifted: 'future',
   leadership: 'lead',
 };

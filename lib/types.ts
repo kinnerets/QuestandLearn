@@ -6,7 +6,7 @@ export type TopicGrade = Grade | 'enrichment';
 
 export type Subject =
   | 'math' | 'geometry' | 'hebrew' | 'english' | 'arabic'
-  | 'geography' | 'bible' | 'science' | 'future_skills' | 'leadership';
+  | 'geography' | 'bible' | 'science' | 'future_skills' | 'gifted' | 'leadership';
 
 export type QuestionType =
   | 'multiple_choice' | 'match_pairs' | 'audio_listen_record' | 'drag_order'

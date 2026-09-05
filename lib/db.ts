@@ -67,7 +67,7 @@ export type DbStation = DbAcademicStation | DbLeadStation;
 const DAILY_SLOTS: { kind: StationKind; subjects: Subject[] }[] = [
   { kind: 'core', subjects: ['math', 'geometry', 'hebrew', 'bible'] },
   { kind: 'lang', subjects: ['arabic', 'english'] },
-  { kind: 'future', subjects: ['future_skills', 'science', 'geography'] },
+  { kind: 'future', subjects: ['future_skills', 'science', 'geography', 'gifted'] },
 ];
 
 // Leadership topic ids are excluded from academic accuracy/catalog.
@@ -1097,7 +1097,7 @@ export async function getSubjectBreakdown(grade: string, childId: string): Promi
     const order = ['math', 'geometry', 'hebrew', 'bible', 'arabic', 'english', 'science', 'geography',
       'future_skills', 'economics', 'fashion', 'politics', 'ai', 'philosophy',
       'metacognition', 'geopolitics', 'cognitive_bias', 'epigenetics', 'procrastination',
-      'decision_making', 'neuroplasticity', 'financial_literacy'];
+      'decision_making', 'neuroplasticity', 'financial_literacy', 'gifted'];
     const out: SubjectBreakdown[] = [];
     for (const subject of order) {
       if (locked.has(subject)) continue;
@@ -1425,7 +1425,7 @@ export async function getSubjectCatalog(grade: string, childId: string): Promise
     const order = ['math', 'geometry', 'hebrew', 'bible', 'arabic', 'english', 'science', 'geography',
       'future_skills', 'economics', 'fashion', 'politics', 'ai', 'philosophy',
       'metacognition', 'geopolitics', 'cognitive_bias', 'epigenetics', 'procrastination',
-      'decision_making', 'neuroplasticity', 'financial_literacy'];
+      'decision_making', 'neuroplasticity', 'financial_literacy', 'gifted'];
     const cards: SubjectCard[] = [];
     for (const subject of order) {
       if (locked.has(subject)) continue;

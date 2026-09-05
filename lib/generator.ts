@@ -1,7 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { getSupabase } from './supabaseClient';
 import { SUBJECT_LABEL } from './constants';
-import { curriculumGroundTruth } from './curriculum';
+import { groundTruthFor } from './curriculum';
 
 // Cheap + fast model for question generation.
 const MODEL = 'claude-haiku-4-5';
@@ -109,7 +109,7 @@ async function verifyQuestions(apiKey: string, items: VerifyItem[], context: str
 - (בערבית) התשובה הנכונה אינה מילה בערבית.
 הכללים הקשיחים לגיל:
 ${rules}${groundTruth ? `
-מקור תכנית הלימודים (Ground Truth) - השאלה חייבת להיות עקבית איתו; אם היא סותרת עובדה או חורגת מהתחום, פסול:
+מקור אמת לנושא (Ground Truth) - השאלה חייבת להיות עקבית איתו; אם היא סותרת עובדה, חורגת מהתחום, או פורצת את הגבולות שמוגדרים בו, פסול:
 ${groundTruth}` : ''}
 בכל ספק - פסול (ok=false). אחרת ok=true. תן reason קצר וברור בעברית לכל פסילה.`,
       tools: [VERIFY_TOOL],
@@ -172,6 +172,9 @@ export async function generateForTopic(topicId: string, count = GENERATE): Promi
     ? ` זו ערבית ${topic.arabic_variant === 'msa' ? 'ספרותית (MSA)' : 'מדוברת'}. השאלה מלמדת אוצר מילים בערבית:
 נסח כל שאלה בעברית פשוטה ("איך אומרים X בערבית?" / "מה פירוש המילה Y?"). ארבע התשובות חייבות להיות מילים בערבית בתעתיק עברי מנוקד (לא תרגום לעברית!), והתשובה הנכונה היא המילה הערבית הנכונה. אל תיצור שאלה שהתשובה הנכונה בה היא מילה בעברית. ודא שהתעתיק והמשמעות נכונים ותקינים.`
     : '';
+  const giftedNote = topic.subject === 'gifted'
+    ? ` זהו פריט חשיבה למסלול מחוננים (בסגנון מבחני איתור): צור אנלוגיה מילולית / סדרת מספרים / "יוצא דופן" / חידת היגיון קצרה. נסח את החידה במלואה בגוף השאלה (למשל בסדרה כתוב את כל האיברים והסימן __; באנלוגיה כתוב "א׳ ל-ב׳ כמו ג׳ ל-?"). ודא תשובה אחת נכונה בלבד שנובעת מחוק/יחס עקבי יחיד, ושלושה מסיחים סבירים אך שגויים.`
+    : '';
 
   const gradeAge = topic.grade === 'grade_5' ? 'בני 10-11, כיתה ה׳ - רמה מאתגרת שמתאימה באמת לגיל, לא חומר של כיתות ב׳-ג׳'
     : topic.grade === 'grade_3' ? 'בני 8-9, כיתה ג׳'
@@ -191,8 +194,8 @@ explanation: משפט קצר שמסביר למה התשובה נכונה.
 עברית תקנית וידידותית. בלי אימוגי. גיוון גבוה בין השאלות.
 חשוב: השאלה חייבת להיות ניתנת למענה מידע כללי שנלמד בגיל הזה - בלי להניח שקראו טקסט מסוים או פרק ספציפי. הישאר בליבת הנושא הנלמד בבית הספר; הימנע מפרטים נדירים, אזוטריים או מבלבלים (למשל בתנ״ך - רק סיפורים ודמויות מוכרים ומרכזיים, בלי לערבב אירועים או דמויות מסיפורים שונים).
 ${gradeRules(topic.grade)}
-${curriculumGroundTruth(topic.subject, topic.grade) ? `מקור תכנית הלימודים (הישאר בתוך הגבולות והעובדות האלה בלבד):
-${curriculumGroundTruth(topic.subject, topic.grade)}
+${groundTruthFor(topic.subject, topic.grade) ? `מקור אמת לנושא (הישאר בתוך הגבולות והעובדות האלה בלבד):
+${groundTruthFor(topic.subject, topic.grade)}
 ` : ''}גיוון (חשוב): שנה בין השאלות את המספרים, הערכים וההקשרים - אל תשאל את אותו תרגיל שוב בניסוח אחר (למשל לא לחזור על "25% מתוך 100" עם מילים שונות). כל שאלה צריכה חישוב או תוכן שונה ממש.
 עברית ונוסח (חשוב מאוד):
 - עברית תקנית, טבעית וברורה. משפט שאלה שלם ומדויק, בלי שגיאות ובלי ניסוח מגושם או מבלבל.
@@ -200,7 +203,7 @@ ${curriculumGroundTruth(topic.subject, topic.grade)}
 - כל ארבעת המסיחים חייבים להיות מאותה קטגוריה והגיוניים כאפשרות, אבל רק אחד נכון באמת.${nikudNote}`;
 
   const avoid = [...existingStems].slice(0, 40);
-  const userMsg = `נושא: ${subjectLabel} - ${topic.sub_topic} (${gradeLabel}).${arabicNote}
+  const userMsg = `נושא: ${subjectLabel} - ${topic.sub_topic} (${gradeLabel}).${arabicNote}${giftedNote}
 צור ${count} שאלות חדשות ומגוונות ברמה מתאימה.
 אל תחזור על השאלות הקיימות (גם לא בניסוח שונה): ${avoid.length ? avoid.map((s) => `"${s}"`).join('; ') : '-'}`;
 
@@ -263,7 +266,7 @@ ${curriculumGroundTruth(topic.subject, topic.grade)}
     const p = r.payload as { stem: string; choices: { id: string; text: string }[]; correct_choice_id: string };
     return { stem: p.stem, choices: p.choices, correct: p.correct_choice_id };
   });
-  const flagged = await verifyQuestions(apiKey, items, `${subjectLabel} · ${gradeLabel}`, gradeRules(topic.grade), curriculumGroundTruth(topic.subject, topic.grade));
+  const flagged = await verifyQuestions(apiKey, items, `${subjectLabel} · ${gradeLabel}`, gradeRules(topic.grade), groundTruthFor(topic.subject, topic.grade));
   rows.forEach((r, i) => {
     if (flagged.has(i)) {
       r.verification_status = 'auto_flagged';
@@ -386,7 +389,7 @@ export async function revalidateExisting(maxTopics = 4): Promise<{ checked: numb
         items.map((i) => ({ stem: i.stem, choices: i.choices, correct: i.correct })),
         `${SUBJECT_LABEL[t.subject as string] ?? t.subject} · ${t.grade}`,
         gradeRules(t.grade as string),
-        curriculumGroundTruth(t.subject as string, t.grade as string),
+        groundTruthFor(t.subject as string, t.grade as string),
       );
       for (const [idx, reason] of flagged) {
         const q = items[idx];
