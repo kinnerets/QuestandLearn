@@ -16,7 +16,16 @@ export function CapiFab() {
   const path = usePathname() || '/';
   const router = useRouter();
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
+  const [dragging, setDragging] = useState(false);
   const drag = useRef({ active: false, moved: false, dx: 0, dy: 0, sx: 0, sy: 0 });
+
+  // Snap to the nearest side edge (like a phone assistive button).
+  function snap(left: number, top: number) {
+    const w = typeof window !== 'undefined' ? window.innerWidth : 400;
+    const center = left + SIZE / 2;
+    const snappedLeft = center < w / 2 ? 12 : w - SIZE - 12;
+    return clamp(snappedLeft, top);
+  }
 
   useEffect(() => {
     try {
@@ -49,7 +58,7 @@ export function CapiFab() {
     if (!drag.current.active) return;
     // Ignore tiny jitter so a tap still registers as a tap, not a drag.
     if (!drag.current.moved && Math.abs(e.clientX - drag.current.sx) + Math.abs(e.clientY - drag.current.sy) < 6) return;
-    drag.current.moved = true;
+    if (!drag.current.moved) { drag.current.moved = true; setDragging(true); }
     setPos(clamp(e.clientX - drag.current.dx, e.clientY - drag.current.dy));
   }
   function onPointerUp(e: React.PointerEvent) {
@@ -57,7 +66,13 @@ export function CapiFab() {
     drag.current.active = false;
     try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId); } catch { /* ignore */ }
     if (wasDrag) {
-      setPos((p) => { if (p) { try { localStorage.setItem(POS_KEY, JSON.stringify(p)); } catch { /* ignore */ } } return p; });
+      setDragging(false); // re-enables the transition → snaps to the edge with a bounce
+      setPos((p) => {
+        if (!p) return p;
+        const s = snap(p.left, p.top);
+        try { localStorage.setItem(POS_KEY, JSON.stringify(s)); } catch { /* ignore */ }
+        return s;
+      });
     } else {
       router.push('/capi');
     }
@@ -69,7 +84,7 @@ export function CapiFab() {
 
   return (
     <button
-      className="capi-fab" aria-label="שאלי את קפי (אפשר לגרור)" style={style}
+      className={`capi-fab${dragging ? ' dragging' : ''}`} aria-label="שאלי את קפי (אפשר לגרור)" style={style}
       onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp}
     >
       <Capi mood="chill" size={42} still />

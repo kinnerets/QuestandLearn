@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Capi, type CapiMood } from '@/components/Capi';
 import { BottomNav } from '@/components/BottomNav';
 import { SpeakButton } from '@/components/SpeakButton';
@@ -76,7 +76,23 @@ function sttLang(subject?: string): string {
   return 'he-IL';
 }
 
+// Remount the whole exercise on a focus/topic change so a client-side navigation
+// to "the next topic" re-initialises cleanly (no full page reload).
 export default function ExercisePage() {
+  return (
+    <Suspense fallback={<Loader />}>
+      <ExerciseGate />
+    </Suspense>
+  );
+}
+
+function ExerciseGate() {
+  const sp = useSearchParams();
+  const key = `${sp.get('focus') ?? ''}|${sp.get('topic') ?? ''}|${sp.get('from') ?? ''}`;
+  return <ExercisePageInner key={key} />;
+}
+
+function ExercisePageInner() {
   const router = useRouter();
   const [backHref, setBackHref] = useState('/'); // where the X returns to (origin screen)
   const [nextInfo, setNextInfo] = useState<NextInfo | null>(null);
@@ -228,7 +244,7 @@ export default function ExercisePage() {
         // into the next topic (no ending screen between topics). But if the child
         // picked this subject from the map, don't drag her into the journey.
         const fromMap = backHref !== '/';
-        if (ni.next && !badges.length && !fromMap) { window.location.href = hrefForNext(ni.next); return; }
+        if (ni.next && !badges.length && !fromMap) { router.push(hrefForNext(ni.next)); return; }
         setNewBadges(badges);
         setNextInfo(ni);
       })();
@@ -736,8 +752,7 @@ function NextCTA() {
     const n = state.next;
     return (
       <div className="cele-actions">
-        {/* full navigation so /exercise re-initialises with the new focus */}
-        <a href={hrefForNext(n)} className="cta">לנושא הבא: {n.label} <span className="cta-ico"><ChevronIcon /></span></a>
+        <Link href={hrefForNext(n)} className="cta">לנושא הבא: {n.label} <span className="cta-ico"><ChevronIcon /></span></Link>
         <Link href="/" className="cta ghost">חזרה למסע</Link>
       </div>
     );
@@ -776,7 +791,7 @@ function BadgeCelebration({ badges, next }: {
         </div>
         <div className="cele-actions">
           {href
-            ? <a href={href} className="cta">לנושא הבא: {next!.label} <span className="cta-ico"><ChevronIcon /></span></a>
+            ? <Link href={href} className="cta">לנושא הבא: {next!.label} <span className="cta-ico"><ChevronIcon /></span></Link>
             : <Link href="/map" className="cta"><span className="cta-ico"><GridIcon /></span> לכל הנושאים</Link>}
           <Link href="/" className="cta ghost">חזרה למסע</Link>
         </div>
