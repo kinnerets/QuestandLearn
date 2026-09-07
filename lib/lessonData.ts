@@ -1,4 +1,4 @@
-import type { StationKind } from './types';
+import type { StationKind, DiagramSpec } from './types';
 
 export interface Choice {
   id: string;
@@ -21,6 +21,7 @@ export interface AcademicStation {
   correctId: string;
   correctIds?: string[];     // all correct ids for a multi_select question
   answers?: string[];        // accepted answers for a type_in question
+  diagram?: DiagramSpec;     // optional SVG illustration (geometry / reasoning)
   hint: string;
   hint2?: string;
   explanation?: string;

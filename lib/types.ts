@@ -15,6 +15,17 @@ export type QuestionType =
 
 export type VerificationStatus = 'pending' | 'auto_passed' | 'auto_flagged';
 
+/** An optional, deterministic illustration drawn as SVG next to a question.
+ *  Geometry shapes (rect/square/triangle/circle) and a row of simple shapes
+ *  (for gifted "odd one out" / series). Kept small and validated so a malformed
+ *  spec is simply dropped - the question still works without it. */
+export interface DiagramSpec {
+  kind: 'rect' | 'square' | 'triangle' | 'circle' | 'shapes';
+  w?: number; h?: number; s?: number; base?: number; height?: number; r?: number;
+  unit?: string;
+  items?: { shape: 'circle' | 'square' | 'triangle' | 'star'; color?: string }[];
+}
+
 export type AvatarSlot = 'base' | 'skin_tone' | 'hairstyle' | 'hair_color' | 'top' | 'accessory';
 
 export interface AvatarConfig {

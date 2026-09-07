@@ -1,7 +1,7 @@
 import { getSupabase } from './supabaseClient';
 import { sm2, qualityFrom, updateMastery } from './composer';
 import { SUBJECT_LABEL, SUBJECT_KIND, SENSITIVE_SUBJECTS, subjectsForInterests } from './constants';
-import type { AvatarConfig, StationKind, Subject } from './types';
+import type { AvatarConfig, StationKind, Subject, DiagramSpec } from './types';
 
 export interface AttemptInput {
   questionId: string;
@@ -43,6 +43,7 @@ export interface DbAcademicStation {
   correctId: string;
   correctIds?: string[];
   answers?: string[];
+  diagram?: DiagramSpec;
   coins: number;
 }
 
@@ -147,6 +148,7 @@ function buildStation(kind: StationKind, subject: string, topic: TopicRow, q: QR
     hint: String(p.hint ?? hints[0] ?? ''),
     hint2: p.hint2 ? String(p.hint2) : hints[1],
     explanation: p.explanation ? String(p.explanation) : undefined,
+    diagram: (p.diagram && typeof p.diagram === 'object') ? (p.diagram as DiagramSpec) : undefined,
     coins: Number(p.coins ?? 10),
   };
   const qtype = String(q.type ?? 'multiple_choice');

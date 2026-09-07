@@ -272,6 +272,8 @@ a { color: inherit; text-decoration: none; }
 .ans-speak { width: 44px; height: auto; flex: none; align-self: stretch; border-radius: 14px; }
 .ans-speak .i { width: 19px; height: 19px; }
 .qtext { font-family: var(--font-display); font-weight: 700; font-size: 1.35rem; margin-top: 6px; text-wrap: balance; }
+.qdiagram { margin-top: 12px; display: flex; justify-content: center; background: var(--bg); border: 1px solid var(--line); border-radius: 14px; padding: 10px; }
+.qdiagram svg { max-width: 260px; }
 .qnote { color: var(--muted); font-weight: 600; font-size: .85rem; margin-top: 4px; }
 
 /* Capi chat */

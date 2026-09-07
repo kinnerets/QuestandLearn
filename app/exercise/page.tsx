@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Capi, type CapiMood } from '@/components/Capi';
 import { BottomNav } from '@/components/BottomNav';
 import { SpeakButton } from '@/components/SpeakButton';
+import { QuestionDiagram } from '@/components/QuestionDiagram';
 import {
   CoinIcon, FlameIcon, CheckIcon, CloseIcon, HeartIcon, LEAD_ICON, GridIcon, ChevronIcon, StarIcon, MicIcon, BADGE_ICON,
 } from '@/components/icons';
@@ -30,7 +31,7 @@ function mapDbLesson(db: DbStation[]): Station[] {
       kind: s.kind, title: s.title, position, subjectLabel: s.subtitle, subject: s.subject, tag: s.tag, stem: s.stem,
       qtype: s.qtype,
       choices: s.choices.map((c) => ({ id: c.id, text: c.text, misconception: c.misconception })),
-      correctId: s.correctId, correctIds: s.correctIds, answers: s.answers, hint: s.hint, hint2: s.hint2, explanation: s.explanation,
+      correctId: s.correctId, correctIds: s.correctIds, answers: s.answers, diagram: s.diagram, hint: s.hint, hint2: s.hint2, explanation: s.explanation,
       difficulty: s.difficulty, coins: s.coins,
       questionId: s.questionId, topicId: s.topicId,
     };
@@ -496,6 +497,7 @@ function AcademicView({
           <SpeakButton text={`${st.stem}. ${st.choices.map((c) => c.text).join('. ')}`} />
         </div>
         <div className="qtext">{st.stem}</div>
+        {st.diagram && <QuestionDiagram spec={st.diagram} />}
       </div>
       <div className={`answers${st.qtype === 'true_false' ? ' tf' : ''}`}>
         {st.choices.map((c) => {
@@ -539,6 +541,7 @@ function MultiSelectView({
           <SpeakButton text={`${st.stem}. ${st.choices.map((c) => c.text).join('. ')}`} />
         </div>
         <div className="qtext">{st.stem}</div>
+        {st.diagram && <QuestionDiagram spec={st.diagram} />}
       </div>
       <div className="ms-note">בחרי בכל התשובות הנכונות{n ? ` (יש ${n})` : ' (יש יותר מאחת)'}</div>
       <div className="answers ms">
@@ -613,6 +616,7 @@ function TypeInView({
           <SpeakButton text={st.stem} />
         </div>
         <div className="qtext">{st.stem}</div>
+        {st.diagram && <QuestionDiagram spec={st.diagram} />}
       </div>
       <div className="typein">
         <div className="typein-field">

@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { getSupabase } from './supabaseClient';
 import { SUBJECT_LABEL } from './constants';
 import { groundTruthFor } from './curriculum';
+import type { DiagramSpec } from './types';
 
 // Cheap + fast model for question generation.
 const MODEL = 'claude-haiku-4-5';
@@ -13,6 +14,35 @@ const GENERATE = 6;    // …ask for this many new ones per call. Small batches 
                        // the background buffer + repeated calls keep the bank growing.
 
 const norm = (s: string) => s.replace(/\s+/g, ' ').trim().toLowerCase();
+
+/** Validate a model-provided diagram spec; return a clean spec or undefined so a
+ *  malformed illustration is simply dropped (the question still works). */
+function validateDiagram(d: unknown): DiagramSpec | undefined {
+  if (!d || typeof d !== 'object') return undefined;
+  const o = d as Record<string, unknown>;
+  const kinds = ['rect', 'square', 'triangle', 'circle', 'shapes'];
+  if (typeof o.kind !== 'string' || !kinds.includes(o.kind)) return undefined;
+  const pos = (v: unknown) => (typeof v === 'number' && isFinite(v) && v > 0 ? v : undefined);
+  const out: DiagramSpec = { kind: o.kind as DiagramSpec['kind'] };
+  if (typeof o.unit === 'string') out.unit = o.unit.slice(0, 6);
+  if (o.kind === 'rect') { out.w = pos(o.w); out.h = pos(o.h); if (!out.w || !out.h) return undefined; }
+  else if (o.kind === 'square') { out.s = pos(o.s) ?? pos(o.w); if (!out.s) return undefined; }
+  else if (o.kind === 'triangle') { out.base = pos(o.base); out.height = pos(o.height); if (!out.base || !out.height) return undefined; }
+  else if (o.kind === 'circle') { out.r = pos(o.r); if (!out.r) return undefined; }
+  else {
+    const shapes = ['circle', 'square', 'triangle', 'star'];
+    const items = Array.isArray(o.items) ? o.items : [];
+    out.items = items.slice(0, 6).map((it) => {
+      const r = (it ?? {}) as Record<string, unknown>;
+      return {
+        shape: (typeof r.shape === 'string' && shapes.includes(r.shape) ? r.shape : 'circle') as 'circle',
+        ...(typeof r.color === 'string' ? { color: r.color } : {}),
+      };
+    });
+    if (!out.items.length) return undefined;
+  }
+  return out;
+}
 
 interface GenResult { inserted: number; reason?: string }
 
@@ -45,6 +75,27 @@ const QUESTION_TOOL = {
             answer_bool: { type: 'boolean' },
             // type_in: accepted written answers (short)
             answers: { type: 'array', items: { type: 'string' } },
+            // optional illustration (geometry shapes / reasoning shape rows)
+            diagram: {
+              type: 'object',
+              additionalProperties: false,
+              properties: {
+                kind: { type: 'string', enum: ['rect', 'square', 'triangle', 'circle', 'shapes'] },
+                w: { type: 'number' }, h: { type: 'number' }, s: { type: 'number' },
+                base: { type: 'number' }, height: { type: 'number' }, r: { type: 'number' },
+                unit: { type: 'string' },
+                items: {
+                  type: 'array',
+                  items: {
+                    type: 'object', additionalProperties: false,
+                    properties: {
+                      shape: { type: 'string', enum: ['circle', 'square', 'triangle', 'star'] },
+                      color: { type: 'string' },
+                    },
+                  },
+                },
+              },
+            },
             // choices for multiple_choice / multi_select (4 options)
             choices: {
               type: 'array',
@@ -217,6 +268,12 @@ export async function generateForTopic(topicId: string, count = GENERATE): Promi
 - שלב גם true_false: קביעה אחת, וב-answer_bool אם היא נכונה (true) או לא (false). בלי choices.
 - שלב גם type_in: שאלה עם תשובה קצרה וחד-משמעית (מילה אחת או מספר) שהילדה כותבת; ב-answers רשום את כל הצורות המקובלות. אל תשתמש ב-type_in לשאלה פתוחה או רב-משמעית.`;
 
+  const diagramNote = topic.subject === 'geometry'
+    ? ` המחשה: כשהשאלה עוסקת בצורה, הוסף שדה diagram שמתאר אותה בדיוק לפי הנתונים בשאלה - kind ("rect"/"square"/"triangle"/"circle") והמידות (w,h; s לריבוע; base,height למשולש; r לרדיוס) ו-unit (יחידת מידה, למשל "ס״מ"). המידות ב-diagram חייבות להתאים למספרים שבשאלה.`
+    : topic.subject === 'gifted'
+      ? ` המחשה: כשמתאים (במיוחד "יוצא דופן" או סדרת צורות), הוסף שדה diagram מסוג kind:"shapes" עם items - רשימת צורות (shape: circle/square/triangle/star, אפשר color בהקס) שמייצגת את הפריט הוויזואלי (למשל שלוש דומות ואחת שונה). ודא שהתשובה הנכונה עקבית עם מה שמצויר.`
+      : '';
+
   const gradeAge = topic.grade === 'grade_5' ? 'בני 10-11, כיתה ה׳ - רמה מאתגרת שמתאימה באמת לגיל, לא חומר של כיתות ב׳-ג׳'
     : topic.grade === 'grade_3' ? 'בני 8-9, כיתה ג׳'
     : 'העשרה, בני 8-11';
@@ -248,7 +305,7 @@ ${groundTruthFor(topic.subject, topic.grade)}
 - בשאלות בחירה: כל ארבע האפשרויות מאותה קטגוריה והגיוניות; ב-multiple_choice רק אחת נכונה, וב-multi_select 2-3 נכונות. אל תסמן תשובה נכונה שאינה באמת נכונה.${nikudNote}`;
 
   const avoid = [...existingStems].slice(0, 40);
-  const userMsg = `נושא: ${subjectLabel} - ${topic.sub_topic} (${gradeLabel}).${arabicNote}${giftedNote}
+  const userMsg = `נושא: ${subjectLabel} - ${topic.sub_topic} (${gradeLabel}).${arabicNote}${giftedNote}${diagramNote}
 צור ${count} שאלות חדשות ומגוונות ברמה מתאימה.
 אל תחזור על השאלות הקיימות (גם לא בניסוח שונה): ${avoid.length ? avoid.map((s) => `"${s}"`).join('; ') : '-'}`;
 
@@ -274,7 +331,7 @@ ${groundTruthFor(topic.subject, topic.grade)}
 
   type Ch = { id?: string; text?: string; misconception?: string };
   type Q = { tag?: string; qtype?: string; stem?: string; difficulty?: number; hints?: string[]; explanation?: string;
-    correct_choice_id?: string; correct_choice_ids?: string[]; answer_bool?: boolean; answers?: string[]; choices?: Ch[] };
+    correct_choice_id?: string; correct_choice_ids?: string[]; answer_bool?: boolean; answers?: string[]; choices?: Ch[]; diagram?: unknown };
   const okId = (id?: string): id is string => !!id && ['a', 'b', 'c', 'd'].includes(id);
   const mapChoices = (cs: Ch[]) => cs.map((c) => ({
     id: c.id, text: String(c.text),
@@ -291,9 +348,11 @@ ${groundTruthFor(topic.subject, topic.grade)}
     const hints = Array.isArray(raw.hints) ? raw.hints.map(String).filter(Boolean).slice(0, 2) : [];
     const diff = Math.min(5, Math.max(1, Math.round(Number(raw.difficulty ?? 2))));
     const stem = String(raw.stem);
+    const dg = validateDiagram(raw.diagram);
     const base = {
       tag: String(raw.tag ?? ''), stem, hint: hints[0] ?? '', hints,
       explanation: raw.explanation ? String(raw.explanation) : undefined, coins,
+      ...(dg ? { diagram: dg } : {}),
     };
     const qtype = restrictMC ? 'multiple_choice' : (raw.qtype ?? 'multiple_choice');
     let type = 'multiple_choice';
