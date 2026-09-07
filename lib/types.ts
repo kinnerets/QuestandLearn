@@ -6,10 +6,11 @@ export type TopicGrade = Grade | 'enrichment';
 
 export type Subject =
   | 'math' | 'geometry' | 'hebrew' | 'english' | 'arabic'
-  | 'geography' | 'bible' | 'science' | 'future_skills' | 'gifted' | 'leadership';
+  | 'geography' | 'bible' | 'science' | 'history' | 'future_skills' | 'gifted' | 'leadership';
 
 export type QuestionType =
-  | 'multiple_choice' | 'match_pairs' | 'audio_listen_record' | 'drag_order'
+  | 'multiple_choice' | 'multi_select' | 'true_false' | 'type_in'
+  | 'match_pairs' | 'audio_listen_record' | 'drag_order'
   | 'open_ai_critique' | 'reflection_log' | 'choice_scenario' | 'budget_allocation';
 
 export type VerificationStatus = 'pending' | 'auto_passed' | 'auto_flagged';

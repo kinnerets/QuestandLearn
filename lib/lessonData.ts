@@ -6,7 +6,7 @@ export interface Choice {
   misconception?: string;
 }
 
-export type QuestionType = 'multiple_choice' | 'true_false' | 'type_in';
+export type QuestionType = 'multiple_choice' | 'multi_select' | 'true_false' | 'type_in';
 
 export interface AcademicStation {
   kind: Exclude<StationKind, 'lead'>;
@@ -19,6 +19,7 @@ export interface AcademicStation {
   qtype?: QuestionType;      // defaults to multiple_choice
   choices: Choice[];
   correctId: string;
+  correctIds?: string[];     // all correct ids for a multi_select question
   answers?: string[];        // accepted answers for a type_in question
   hint: string;
   hint2?: string;

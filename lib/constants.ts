@@ -10,6 +10,7 @@ export const SUBJECT_LABEL: Record<string, string> = {
   hebrew: 'עברית',
   bible: 'תנ״ך',
   science: 'מדע',
+  history: 'היסטוריה',
   arabic: 'ערבית',
   english: 'אנגלית',
   geography: 'גאוגרפיה',
@@ -74,7 +75,7 @@ export function subjectsForInterests(interests: string[]): Set<string> {
 export const SUBJECT_KIND: Record<string, 'core' | 'lang' | 'future' | 'lead'> = {
   math: 'core', geometry: 'core', hebrew: 'core', bible: 'core', science: 'future',
   arabic: 'lang', english: 'lang',
-  future_skills: 'future', geography: 'future',
+  future_skills: 'future', geography: 'future', history: 'future',
   economics: 'future', fashion: 'future', politics: 'future', ai: 'future', philosophy: 'future',
   metacognition: 'future', geopolitics: 'future', cognitive_bias: 'future', epigenetics: 'future',
   procrastination: 'future', decision_making: 'future', neuroplasticity: 'future', financial_literacy: 'future',

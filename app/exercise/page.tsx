@@ -30,7 +30,7 @@ function mapDbLesson(db: DbStation[]): Station[] {
       kind: s.kind, title: s.title, position, subjectLabel: s.subtitle, subject: s.subject, tag: s.tag, stem: s.stem,
       qtype: s.qtype,
       choices: s.choices.map((c) => ({ id: c.id, text: c.text, misconception: c.misconception })),
-      correctId: s.correctId, answers: s.answers, hint: s.hint, hint2: s.hint2, explanation: s.explanation,
+      correctId: s.correctId, correctIds: s.correctIds, answers: s.answers, hint: s.hint, hint2: s.hint2, explanation: s.explanation,
       difficulty: s.difficulty, coins: s.coins,
       questionId: s.questionId, topicId: s.topicId,
     };
@@ -106,6 +106,7 @@ export default function ExercisePage() {
   const [eliminated, setEliminated] = useState<string[]>([]);
   const [revealed, setRevealed] = useState(false);
   const [typed, setTyped] = useState(''); // the fill-in answer being written
+  const [picks, setPicks] = useState<string[]>([]); // multi-select: chosen ids
   const [phase, setPhase] = useState<Phase>('playing');
   const [mood, setMood] = useState<CapiMood>('chill');
   const [message, setMessage] = useState<string>('');
@@ -191,7 +192,7 @@ export default function ExercisePage() {
 
   function resetStation() {
     setTries(0); setChosenId(null); setWrongIds([]); setEliminated([]); setRevealed(false);
-    setTyped(''); setPhase('playing'); setMood('chill'); setMessage('');
+    setTyped(''); setPicks([]); setPhase('playing'); setMood('chill'); setMessage('');
   }
 
   // Ask the server to top up this subject's question bank (fire-and-forget).
@@ -325,6 +326,45 @@ export default function ExercisePage() {
     }
   }
 
+  function submitMulti(st: AcademicStation) {
+    if (phase === 'done') return;
+    const correct = new Set(st.correctIds ?? []);
+    const chosen = new Set(picks);
+    const exact = correct.size > 0 && correct.size === chosen.size && [...correct].every((id) => chosen.has(id));
+    if (exact) {
+      buzz();
+      setCoins((c) => c + st.coins);
+      setEarned((e) => e + st.coins);
+      setCorrect((n) => n + 1);
+      setAnswered((n) => n + 1);
+      setMood('cheer');
+      setRevealed(true);
+      setMessage(`${pick(PRAISE)} +${st.coins} מטבעות.`);
+      setPhase('done');
+      setResults((r) => [...r, { stem: st.stem, ok: true }]);
+      logAttempt(st, true, tries);
+      if (tries === 0) {
+        setCleanStreak((s) => { const ns = s + 1; if (ns >= 2) { setLevel((l) => Math.min(5, l + 1)); return 0; } return ns; });
+      } else setCleanStreak(0);
+    } else {
+      const t = tries + 1;
+      setTries(t);
+      if (t === 1) { setMood('hint'); setMessage('כמעט! בחרי את כל התשובות הנכונות (יש יותר מאחת). כיוון: ' + st.hint); }
+      else if (t === 2) { setMood('hint'); setMessage(st.hint2 ? ('רמז נוסף: ' + st.hint2) : 'בדקי שוב - חלק מהסימונים לא מדויקים.'); }
+      else {
+        setRevealed(true);
+        setAnswered((n) => n + 1);
+        setMood('chill');
+        setCleanStreak(0);
+        setLevel((l) => Math.max(1, l - 1));
+        setMessage(pick(GENTLE) + (st.explanation ? ' ' + st.explanation : ' סימנתי את התשובות הנכונות.'));
+        setPhase('done');
+        setResults((r) => [...r, { stem: st.stem, ok: false }]);
+        logAttempt(st, false, 2);
+      }
+    }
+  }
+
   function chooseLead(id: string) {
     if (phase === 'done') return;
     const st = station as LeadStation;
@@ -383,8 +423,12 @@ export default function ExercisePage() {
           : station.qtype === 'type_in'
             ? <TypeInView st={station} value={typed} onChange={setTyped}
                 revealed={revealed} locked={phase === 'done'} onSubmit={() => submitTyped(station)} />
-            : <AcademicView st={station} chosenId={chosenId} wrongIds={wrongIds} eliminated={eliminated}
-                revealed={revealed} locked={phase === 'done'} onAnswer={(id) => answer(station, id)} />}
+            : station.qtype === 'multi_select'
+              ? <MultiSelectView st={station} picks={picks} onToggle={(id) =>
+                    setPicks((p) => p.includes(id) ? p.filter((x) => x !== id) : [...p, id])}
+                  revealed={revealed} locked={phase === 'done'} onSubmit={() => submitMulti(station)} />
+              : <AcademicView st={station} chosenId={chosenId} wrongIds={wrongIds} eliminated={eliminated}
+                  revealed={revealed} locked={phase === 'done'} onAnswer={(id) => answer(station, id)} />}
 
         {message && (
           <div className="capi-row" style={{ marginTop: 14 }}>
@@ -457,6 +501,52 @@ function AcademicView({
           );
         })}
       </div>
+    </>
+  );
+}
+
+/** Multi-select: several answers are correct; the child ticks all of them and
+ *  taps "בדיקה". A bold banner makes the "choose all correct" rule unmissable. */
+function MultiSelectView({
+  st, picks, onToggle, revealed, locked, onSubmit,
+}: {
+  st: AcademicStation; picks: string[]; onToggle: (id: string) => void;
+  revealed: boolean; locked: boolean; onSubmit: () => void;
+}) {
+  const correct = new Set(st.correctIds ?? []);
+  const n = correct.size;
+  return (
+    <>
+      <div className="qcard">
+        <div className="qcard-top">
+          <div className="qtag">{st.tag}</div>
+          <SpeakButton text={`${st.stem}. ${st.choices.map((c) => c.text).join('. ')}`} />
+        </div>
+        <div className="qtext">{st.stem}</div>
+      </div>
+      <div className="ms-note">בחרי בכל התשובות הנכונות{n ? ` (יש ${n})` : ' (יש יותר מאחת)'}</div>
+      <div className="answers ms">
+        {st.choices.map((c) => {
+          const on = picks.includes(c.id);
+          const isCorrect = revealed && correct.has(c.id);
+          const isWrongPick = revealed && on && !correct.has(c.id);
+          const cls = `ans ms-ans${on ? ' on' : ''}${isCorrect ? ' correct' : ''}${isWrongPick ? ' wrong' : ''}`;
+          return (
+            <div key={c.id} className="ans-row">
+              <button className={cls} onClick={() => onToggle(c.id)} disabled={locked}>
+                <span className={`ms-box${on ? ' on' : ''}`}>{on && <CheckIcon />}</span>
+                <span>{c.text}</span>
+                {isCorrect && <CheckIcon />}
+                {isWrongPick && <CloseIcon />}
+              </button>
+              <SpeakButton text={c.text} className="ans-speak" />
+            </div>
+          );
+        })}
+      </div>
+      {!locked && (
+        <button className="cta typein-check" onClick={onSubmit} disabled={!picks.length}>בדיקה</button>
+      )}
     </>
   );
 }

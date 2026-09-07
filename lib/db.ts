@@ -34,12 +34,13 @@ export interface DbAcademicStation {
   difficulty: number;
   tag: string;
   stem: string;
-  qtype: 'multiple_choice' | 'true_false' | 'type_in';
+  qtype: 'multiple_choice' | 'multi_select' | 'true_false' | 'type_in';
   hint: string;
   hint2?: string;
   explanation?: string;
   choices: { id: string; text: string; misconception?: string }[];
   correctId: string;
+  correctIds?: string[];
   answers?: string[];
   coins: number;
 }
@@ -67,7 +68,7 @@ export type DbStation = DbAcademicStation | DbLeadStation;
 const DAILY_SLOTS: { kind: StationKind; subjects: Subject[] }[] = [
   { kind: 'core', subjects: ['math', 'geometry', 'hebrew', 'bible'] },
   { kind: 'lang', subjects: ['arabic', 'english'] },
-  { kind: 'future', subjects: ['future_skills', 'science', 'geography', 'gifted'] },
+  { kind: 'future', subjects: ['future_skills', 'science', 'geography', 'history', 'gifted'] },
 ];
 
 // Leadership topic ids are excluded from academic accuracy/catalog.
@@ -159,6 +160,14 @@ function buildStation(kind: StationKind, subject: string, topic: TopicRow, q: QR
       choices: [{ id: 't', text: 'נכון' }, { id: 'f', text: 'לא נכון' }],
       correctId: yes ? 't' : 'f',
     };
+  }
+
+  // Multi-select: several correct answers; the child must pick all of them.
+  if (qtype === 'multi_select') {
+    const msChoices = shuffle((p.choices as DbAcademicStation['choices']) ?? []);
+    const rawIds = Array.isArray(p.correct_choice_ids) ? (p.correct_choice_ids as unknown[]) : [];
+    const correctIds = rawIds.map((x) => String(x)).filter((id) => msChoices.some((c) => c.id === id));
+    return { ...common, qtype: 'multi_select', choices: msChoices, correctId: correctIds[0] ?? '', correctIds };
   }
 
   // Multiple choice (default). Shuffle so the correct answer isn't always first.
@@ -952,7 +961,8 @@ export async function getPlacementQuestions(grade = 'grade_3'): Promise<DbStatio
     const picks: { topic: TopicRow; q: QRow }[] = [];
     for (const t of topics) {
       if (t.subject === LEADERSHIP_SUBJECT) continue;
-      const qs = qByTopic.get(t.id) ?? [];
+      // Placement is a quick single-tap ramp - keep to single-answer types.
+      const qs = (qByTopic.get(t.id) ?? []).filter((q) => q.type === 'multiple_choice' || q.type === 'true_false');
       if (qs.length) picks.push({ topic: t, q: qs[Math.floor(qs.length / 2)] });
     }
     if (!picks.length) return null;
@@ -1094,7 +1104,7 @@ export async function getSubjectBreakdown(grade: string, childId: string): Promi
       bySubject.set(t.subject, arr);
     }
     const locked = await getLockedSubjects(sb);
-    const order = ['math', 'geometry', 'hebrew', 'bible', 'arabic', 'english', 'science', 'geography',
+    const order = ['math', 'geometry', 'hebrew', 'bible', 'arabic', 'english', 'science', 'geography', 'history',
       'future_skills', 'economics', 'fashion', 'politics', 'ai', 'philosophy',
       'metacognition', 'geopolitics', 'cognitive_bias', 'epigenetics', 'procrastination',
       'decision_making', 'neuroplasticity', 'financial_literacy', 'gifted'];
@@ -1422,7 +1432,7 @@ export async function getSubjectCatalog(grade: string, childId: string): Promise
     // Academic + enrichment subjects. Leadership worlds are surfaced separately.
     // Parent-locked (sensitive) subjects are hidden from the child's map.
     const locked = await getLockedSubjects(sb);
-    const order = ['math', 'geometry', 'hebrew', 'bible', 'arabic', 'english', 'science', 'geography',
+    const order = ['math', 'geometry', 'hebrew', 'bible', 'arabic', 'english', 'science', 'geography', 'history',
       'future_skills', 'economics', 'fashion', 'politics', 'ai', 'philosophy',
       'metacognition', 'geopolitics', 'cognitive_bias', 'epigenetics', 'procrastination',
       'decision_making', 'neuroplasticity', 'financial_literacy', 'gifted'];

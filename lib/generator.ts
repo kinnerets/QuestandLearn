@@ -18,7 +18,7 @@ interface GenResult { inserted: number; reason?: string }
 
 const QUESTION_TOOL = {
   name: 'emit_questions',
-  description: 'החזר את השאלות שנוצרו במבנה מובנה',
+  description: 'החזר את השאלות שנוצרו במבנה מובנה, מגוון סוגים',
   input_schema: {
     type: 'object' as const,
     additionalProperties: false,
@@ -29,14 +29,23 @@ const QUESTION_TOOL = {
         items: {
           type: 'object',
           additionalProperties: false,
-          required: ['tag', 'stem', 'difficulty', 'hints', 'explanation', 'choices', 'correct_choice_id'],
+          required: ['tag', 'qtype', 'stem', 'difficulty', 'hints', 'explanation'],
           properties: {
             tag: { type: 'string' },
+            qtype: { type: 'string', enum: ['multiple_choice', 'multi_select', 'true_false', 'type_in'] },
             stem: { type: 'string' },
             difficulty: { type: 'integer', minimum: 1, maximum: 5 },
             hints: { type: 'array', items: { type: 'string' } },
             explanation: { type: 'string' },
+            // multiple_choice: exactly one correct id
             correct_choice_id: { type: 'string', enum: ['a', 'b', 'c', 'd'] },
+            // multi_select: two or more correct ids
+            correct_choice_ids: { type: 'array', items: { type: 'string', enum: ['a', 'b', 'c', 'd'] } },
+            // true_false: the correct verdict
+            answer_bool: { type: 'boolean' },
+            // type_in: accepted written answers (short)
+            answers: { type: 'array', items: { type: 'string' } },
+            // choices for multiple_choice / multi_select (4 options)
             choices: {
               type: 'array',
               items: {
@@ -82,7 +91,27 @@ const VERIFY_TOOL = {
   },
 };
 
-interface VerifyItem { stem: string; choices: { id: string; text: string }[]; correct: string }
+interface VerifyItem {
+  stem: string;
+  qtype?: string;
+  choices?: { id: string; text: string }[];
+  correct?: string;         // multiple_choice / true_false: the single correct id
+  correctIds?: string[];    // multi_select: all correct ids
+  answers?: string[];       // type_in: accepted answers
+}
+
+/** Render one item for the checker, marking the correct answer(s) per type. */
+function verifyListing(q: VerifyItem): string {
+  if (q.qtype === 'type_in') {
+    return `  (השלמה) תשובות מתקבלות: ${(q.answers ?? []).join(' ; ')}`;
+  }
+  if (q.qtype === 'true_false') {
+    return `  (נכון/לא נכון) התשובה הנכונה: ${q.correct === 't' ? 'נכון' : 'לא נכון'}`;
+  }
+  const correctSet = new Set(q.correctIds ?? (q.correct ? [q.correct] : []));
+  const label = q.qtype === 'multi_select' ? ' (רב-ברירה: כמה תשובות נכונות)' : '';
+  return label + '\n' + (q.choices ?? []).map((c) => `  ${c.id}) ${c.text}${correctSet.has(c.id) ? '  ✓' : ''}`).join('\n');
+}
 
 /**
  * Second-pass check (a different, stricter prompt). Returns a map of index →
@@ -94,15 +123,15 @@ async function verifyQuestions(apiKey: string, items: VerifyItem[], context: str
   if (!items.length) return flagged;
   try {
     const anthropic = new Anthropic({ apiKey, timeout: 40_000, maxRetries: 1 });
-    const listing = items.map((q, i) =>
-      `#${i} | ${q.stem}\n` + q.choices.map((c) => `  ${c.id}) ${c.text}${c.id === q.correct ? '  ✓' : ''}`).join('\n'),
-    ).join('\n\n');
+    const listing = items.map((q, i) => `#${i} | ${q.stem}${verifyListing(q)}`).join('\n\n');
     const resp = await anthropic.messages.create({
       model: MODEL,
       max_tokens: 1500,
       system: `אתה שומר סף פדגוגי קפדן שבודק שאלות לימוד לילדים (${context}). תפקידך למצוא פגמים ולפסול. סמן שאלה כלא‑תקינה (ok=false) אם מתקיים ולו אחד מאלה:
-- התשובה המסומנת ✓ שגויה או לא מדויקת עובדתית (100% נכונות נדרשת).
-- יש יותר מתשובה נכונה אחת, או שהתשובה משתמעת לשתי פנים.
+- התשובה/ות המסומנות ✓ שגויות או לא מדויקות עובדתית (100% נכונות נדרשת).
+- בשאלת רב-ברירה רגילה: יש יותר מתשובה נכונה אחת, או שהתשובה משתמעת לשתי פנים.
+- בשאלת רב-ברירה עם כמה נכונות (multi_select): לא כל התשובות הנכונות סומנו ✓, או שסומנה תשובה שגויה, או שאין בדיוק חלוקה ברורה בין נכונות ללא-נכונות.
+- בשאלת השלמה (type_in): התשובה המתקבלת שגויה, או שיש תשובות נכונות נוספות שחסרות ברשימה (השאלה חייבת להיות חד-משמעית).
 - טעות עובדתית, ערבוב בין סיפורים/דמויות/אירועים, או ניסוח מבלבל.
 - דורשת ידע נדיר או קריאת טקסט ספציפי שילד בגיל הזה לא בהכרח למד.
 - הפרה של הכללים הקשיחים לגיל שלהלן (למשל מספרים מחוץ לטווח, גדלים לא סבירים, נושא מעבר לרמת הכיתה).
@@ -176,6 +205,17 @@ export async function generateForTopic(topicId: string, count = GENERATE): Promi
     ? ` זהו פריט חשיבה למסלול מחוננים (בסגנון מבחני איתור): צור אנלוגיה מילולית / סדרת מספרים / "יוצא דופן" / חידת היגיון קצרה. נסח את החידה במלואה בגוף השאלה (למשל בסדרה כתוב את כל האיברים והסימן __; באנלוגיה כתוב "א׳ ל-ב׳ כמו ג׳ ל-?"). ודא תשובה אחת נכונה בלבד שנובעת מחוק/יחס עקבי יחיד, ושלושה מסיחים סבירים אך שגויים.`
     : '';
 
+  // Arabic (transliterated vocab) and the gifted reasoning items need exactly one
+  // correct option, so keep them multiple-choice; everything else varies its types.
+  const restrictMC = topic.subject === 'arabic' || topic.subject === 'gifted';
+  const typesNote = restrictMC
+    ? 'סוג השאלות: כולן multiple_choice עם 4 אפשרויות (a,b,c,d) ובדיוק תשובה נכונה אחת. מלא choices ו-correct_choice_id. (qtype="multiple_choice").'
+    : `גוון את סוגי השאלות במנה (קבע שדה qtype לכל שאלה, ומלא רק את השדות של אותו סוג):
+- רוב השאלות multiple_choice: 4 אפשרויות (a,b,c,d) ותשובה נכונה אחת (choices + correct_choice_id).
+- שלב גם multi_select: 4 אפשרויות, אך 2 או 3 מהן נכונות (choices + correct_choice_ids עם כל הנכונות, ולפחות אפשרות אחת שגויה). נסח את גוף השאלה כך שברור שיש כמה תשובות (למשל "אילו מהבאים נכונים?").
+- שלב גם true_false: קביעה אחת, וב-answer_bool אם היא נכונה (true) או לא (false). בלי choices.
+- שלב גם type_in: שאלה עם תשובה קצרה וחד-משמעית (מילה אחת או מספר) שהילדה כותבת; ב-answers רשום את כל הצורות המקובלות. אל תשתמש ב-type_in לשאלה פתוחה או רב-משמעית.`;
+
   const gradeAge = topic.grade === 'grade_5' ? 'בני 10-11, כיתה ה׳ - רמה מאתגרת שמתאימה באמת לגיל, לא חומר של כיתות ב׳-ג׳'
     : topic.grade === 'grade_3' ? 'בני 8-9, כיתה ג׳'
     : 'העשרה, בני 8-11';
@@ -186,7 +226,7 @@ export async function generateForTopic(topicId: string, count = GENERATE): Promi
     : '';
   const system = `אתה יוצר שאלות לימוד לילדים בעברית לאפליקציה חינוכית.
 קהל היעד: ${gradeAge}. חשוב מאוד: התאם את רמת הקושי לגיל האמיתי - שאלות לכיתה ה׳ צריכות להיות מאתגרות ובעומק המתאים (למשל בעברית: הבחנה בין עובדה לדעה, משמעות בהקשר, מבנה טיעון; בחשבון: שברים, אחוזים, בעיות מילוליות רב-שלביות), לא ידע בסיסי מדי.
-כל שאלה: רב-ברירה עם 4 תשובות (מזהים a,b,c,d), בדיוק תשובה נכונה אחת.
+${typesNote}
 difficulty: דרג את קושי השאלה 1-5 ביחס לגיל.
 hints: מערך של בדיוק 2 רמזים מדורגים - רמז 1 כיוון עדין, רמז 2 חזק וממוקד יותר. אל תחשוף את התשובה ברמזים.
 explanation: משפט קצר שמסביר למה התשובה נכונה.
@@ -200,7 +240,7 @@ ${groundTruthFor(topic.subject, topic.grade)}
 עברית ונוסח (חשוב מאוד):
 - עברית תקנית, טבעית וברורה. משפט שאלה שלם ומדויק, בלי שגיאות ובלי ניסוח מגושם או מבלבל.
 - אל תחשוף את התשובה בתוך השאלה. במיוחד בשאלות אוצר מילים (אנגלית/ערבית): אל תזכיר את המילה הנכונה בגוף השאלה. נסח נקי, למשל "איזו מילה באנגלית מתארת משהו גדול מאוד?" (ולא להזכיר את enormous/huge בשאלה).
-- כל ארבעת המסיחים חייבים להיות מאותה קטגוריה והגיוניים כאפשרות, אבל רק אחד נכון באמת.${nikudNote}`;
+- בשאלות בחירה: כל ארבע האפשרויות מאותה קטגוריה והגיוניות; ב-multiple_choice רק אחת נכונה, וב-multi_select 2-3 נכונות. אל תסמן תשובה נכונה שאינה באמת נכונה.${nikudNote}`;
 
   const avoid = [...existingStems].slice(0, 40);
   const userMsg = `נושא: ${subjectLabel} - ${topic.sub_topic} (${gradeLabel}).${arabicNote}${giftedNote}
@@ -227,46 +267,76 @@ ${groundTruthFor(topic.subject, topic.grade)}
   }
   if (!Array.isArray(questions)) return { inserted: 0, reason: 'no-output' };
 
-  type Q = { tag?: string; stem?: string; difficulty?: number; hints?: string[]; explanation?: string; correct_choice_id?: string;
-    choices?: { id?: string; text?: string; misconception?: string }[] };
+  type Ch = { id?: string; text?: string; misconception?: string };
+  type Q = { tag?: string; qtype?: string; stem?: string; difficulty?: number; hints?: string[]; explanation?: string;
+    correct_choice_id?: string; correct_choice_ids?: string[]; answer_bool?: boolean; answers?: string[]; choices?: Ch[] };
+  const okId = (id?: string): id is string => !!id && ['a', 'b', 'c', 'd'].includes(id);
+  const mapChoices = (cs: Ch[]) => cs.map((c) => ({
+    id: c.id, text: String(c.text),
+    ...(c.misconception ? { misconception: String(c.misconception) } : {}),
+  }));
+  const coins = topic.grade === 'grade_5' ? 12 : 10;
+
   const rows: Record<string, unknown>[] = [];
+  const verifyItems: VerifyItem[] = [];
   for (const raw of questions as Q[]) {
-    if (!raw?.stem || !Array.isArray(raw.choices) || raw.choices.length !== 4) continue;
-    const cid = raw.correct_choice_id;
-    if (!cid || !['a', 'b', 'c', 'd'].includes(cid)) continue;
-    if (!raw.choices.some((c) => c.id === cid && c.text)) continue;
-    if (raw.choices.some((c) => !c.id || !c.text)) continue;
+    if (!raw?.stem) continue;
     const key = norm(String(raw.stem));
     if (existingStems.has(key)) continue; // dedup vs old bank + this batch
-    existingStems.add(key);
     const hints = Array.isArray(raw.hints) ? raw.hints.map(String).filter(Boolean).slice(0, 2) : [];
     const diff = Math.min(5, Math.max(1, Math.round(Number(raw.difficulty ?? 2))));
-    rows.push({
-      topic_id: topicId, type: 'multiple_choice', difficulty: diff,
-      source: 'ai_generated', verification_status: 'auto_passed',
-      payload: {
-        tag: String(raw.tag ?? ''),
-        stem: String(raw.stem),
-        hint: hints[0] ?? '',
-        hints,
-        explanation: raw.explanation ? String(raw.explanation) : undefined,
-        choices: raw.choices.map((c) => ({
-          id: c.id, text: String(c.text),
-          ...(c.misconception ? { misconception: String(c.misconception) } : {}),
-        })),
-        correct_choice_id: cid,
-        coins: topic.grade === 'grade_5' ? 12 : 10,
-      },
-    });
+    const stem = String(raw.stem);
+    const base = {
+      tag: String(raw.tag ?? ''), stem, hint: hints[0] ?? '', hints,
+      explanation: raw.explanation ? String(raw.explanation) : undefined, coins,
+    };
+    const qtype = restrictMC ? 'multiple_choice' : (raw.qtype ?? 'multiple_choice');
+    let type = 'multiple_choice';
+    let payload: Record<string, unknown> | null = null;
+    let vi: VerifyItem | null = null;
+
+    if (qtype === 'true_false') {
+      if (typeof raw.answer_bool !== 'boolean') continue;
+      type = 'true_false';
+      payload = { ...base, answer: raw.answer_bool };
+      vi = { stem, qtype: 'true_false', correct: raw.answer_bool ? 't' : 'f' };
+    } else if (qtype === 'type_in') {
+      const answers = Array.isArray(raw.answers) ? raw.answers.map((a) => String(a).trim()).filter(Boolean) : [];
+      if (!answers.length) continue;
+      type = 'type_in';
+      payload = { ...base, answers };
+      vi = { stem, qtype: 'type_in', answers };
+    } else if (qtype === 'multi_select') {
+      if (!Array.isArray(raw.choices) || raw.choices.length !== 4) continue;
+      if (raw.choices.some((c) => !okId(c.id) || !c.text)) continue;
+      const uniq = [...new Set((raw.correct_choice_ids ?? []).filter(okId))];
+      // Need at least two correct and at least one wrong option.
+      if (uniq.length < 2 || uniq.length >= 4) continue;
+      if (!uniq.every((id) => raw.choices!.some((c) => c.id === id))) continue;
+      const choices = mapChoices(raw.choices);
+      type = 'multi_select';
+      payload = { ...base, choices, correct_choice_ids: uniq };
+      vi = { stem, qtype: 'multi_select', choices: choices as { id: string; text: string }[], correctIds: uniq };
+    } else {
+      if (!Array.isArray(raw.choices) || raw.choices.length !== 4) continue;
+      const cid = raw.correct_choice_id;
+      if (!okId(cid)) continue;
+      if (!raw.choices.some((c) => c.id === cid && c.text)) continue;
+      if (raw.choices.some((c) => !okId(c.id) || !c.text)) continue;
+      const choices = mapChoices(raw.choices);
+      type = 'multiple_choice';
+      payload = { ...base, choices, correct_choice_id: cid };
+      vi = { stem, qtype: 'multiple_choice', choices: choices as { id: string; text: string }[], correct: cid };
+    }
+    if (!payload || !vi) continue;
+    existingStems.add(key);
+    rows.push({ topic_id: topicId, type, difficulty: diff, source: 'ai_generated', verification_status: 'auto_passed', payload });
+    verifyItems.push(vi);
   }
   if (!rows.length) return { inserted: 0, reason: 'all-duplicates' };
 
   // Second-pass verification: anything the checker flags is held for parent review.
-  const items: VerifyItem[] = rows.map((r) => {
-    const p = r.payload as { stem: string; choices: { id: string; text: string }[]; correct_choice_id: string };
-    return { stem: p.stem, choices: p.choices, correct: p.correct_choice_id };
-  });
-  const flagged = await verifyQuestions(apiKey, items, `${subjectLabel} · ${gradeLabel}`, gradeRules(topic.grade), groundTruthFor(topic.subject, topic.grade));
+  const flagged = await verifyQuestions(apiKey, verifyItems, `${subjectLabel} · ${gradeLabel}`, gradeRules(topic.grade), groundTruthFor(topic.subject, topic.grade));
   rows.forEach((r, i) => {
     if (flagged.has(i)) {
       r.verification_status = 'auto_flagged';
@@ -353,7 +423,8 @@ export async function thinTopicCount(): Promise<number> {
  * Re-check questions already live in the bank against the hardened grade rules,
  * and hide (auto_flag) any that fail - so the app cleans up its own past output.
  * Samples a bounded number of topics per run so cost stays predictable; over
- * several nightly runs it covers the whole bank. Multiple-choice + true/false.
+ * several nightly runs it covers the whole bank. Covers multiple_choice,
+ * multi_select, true/false and type_in.
  */
 export async function revalidateExisting(maxTopics = 4): Promise<{ checked: number; flagged: number }> {
   const out = { checked: 0, flagged: 0 };
@@ -369,24 +440,33 @@ export async function revalidateExisting(maxTopics = 4): Promise<{ checked: numb
         .select('id,type,payload').eq('topic_id', t.id as string)
         .eq('verification_status', 'auto_passed').limit(12);
       const payloadById = new Map((qs ?? []).map((q) => [q.id as string, q.payload as Record<string, unknown>]));
+      const CHECKABLE = new Set(['multiple_choice', 'multi_select', 'true_false', 'type_in']);
       const items = (qs ?? [])
-        .filter((q) => q.type === 'multiple_choice' || q.type === 'true_false')
+        .filter((q) => CHECKABLE.has(String(q.type)))
         .map((q) => {
-          const p = q.payload as { stem?: string; choices?: { id: string; text: string }[]; correct_choice_id?: string; answer?: unknown };
-          const choices = q.type === 'true_false'
-            ? [{ id: 't', text: 'נכון' }, { id: 'f', text: 'לא נכון' }]
-            : (p.choices ?? []);
-          const correct = q.type === 'true_false'
-            ? (p.answer === true || p.answer === 'true' || p.correct_choice_id === 't' ? 't' : 'f')
-            : String(p.correct_choice_id ?? '');
-          return { id: q.id as string, stem: String(p.stem ?? ''), choices, correct };
+          const p = q.payload as { stem?: string; choices?: { id: string; text: string }[]; correct_choice_id?: string; correct_choice_ids?: string[]; answer?: unknown; answers?: unknown[] };
+          const stem = String(p.stem ?? '');
+          if (q.type === 'true_false') {
+            const yes = p.answer === true || p.answer === 'true' || p.correct_choice_id === 't';
+            return { id: q.id as string, stem, vi: { stem, qtype: 'true_false', correct: yes ? 't' : 'f' } as VerifyItem, ok: !!stem };
+          }
+          if (q.type === 'type_in') {
+            const answers = Array.isArray(p.answers) ? p.answers.map((a) => String(a)) : [];
+            return { id: q.id as string, stem, vi: { stem, qtype: 'type_in', answers } as VerifyItem, ok: !!stem && !!answers.length };
+          }
+          const choices = p.choices ?? [];
+          if (q.type === 'multi_select') {
+            const ids = Array.isArray(p.correct_choice_ids) ? p.correct_choice_ids.map(String) : [];
+            return { id: q.id as string, stem, vi: { stem, qtype: 'multi_select', choices, correctIds: ids } as VerifyItem, ok: !!stem && choices.length > 0 };
+          }
+          return { id: q.id as string, stem, vi: { stem, qtype: 'multiple_choice', choices, correct: String(p.correct_choice_id ?? '') } as VerifyItem, ok: !!stem && choices.length > 0 };
         })
-        .filter((i) => i.stem && i.choices.length);
+        .filter((i) => i.ok);
       if (!items.length) continue;
       out.checked += items.length;
       const flagged = await verifyQuestions(
         apiKey,
-        items.map((i) => ({ stem: i.stem, choices: i.choices, correct: i.correct })),
+        items.map((i) => i.vi),
         `${SUBJECT_LABEL[t.subject as string] ?? t.subject} · ${t.grade}`,
         gradeRules(t.grade as string),
         groundTruthFor(t.subject as string, t.grade as string),
