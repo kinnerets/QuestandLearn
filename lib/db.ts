@@ -924,7 +924,7 @@ function focusLength(grade: string): number {
  * solved (caller shows a "completed" screen), null on error/no content.
  */
 export async function composeFocus(
-  grade = 'grade_3', subject = 'math', childId?: string, topicId?: string,
+  grade = 'grade_3', subject = 'math', childId?: string, topicId?: string, repeat = false,
 ): Promise<DbStation[] | null> {
   const sb = getSupabase();
   if (!sb) return null;
@@ -981,6 +981,20 @@ export async function composeFocus(
     // with already-solved ones (spaced review) so a sitting is never just 1-2.
     // Final pass dedupes by wording so a session never repeats the same question.
     const want = focusLength(grade);
+    // Extra-practice mode: the child asked for more in a subject she already
+    // finished - re-serve solved questions (deduped by wording), shuffled.
+    if (repeat && !fresh.length) {
+      const dedupReview: { topic: TopicRow; q: QRow }[] = [];
+      const rused = new Set<string>();
+      for (const item of [...review].sort(() => Math.random() - 0.5)) {
+        const s = stemOf(item.q);
+        if (s && rused.has(s)) continue;
+        rused.add(s);
+        dedupReview.push(item);
+        if (dedupReview.length >= want) break;
+      }
+      if (dedupReview.length) return dedupReview.map(({ topic, q }) => buildStation(kind, subject, topic, q));
+    }
     const ordered = fresh.length >= want ? fresh : [...fresh, ...review];
     const pool: { topic: TopicRow; q: QRow }[] = [];
     const used = new Set<string>();

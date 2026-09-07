@@ -47,6 +47,18 @@ function hrefForNext(n: NextTopic): string {
     : `/exercise?focus=${n.subject}`;
 }
 
+/** Extra-practice in the same subject (re-serves solved questions). The nonce
+ *  makes each tap a fresh navigation so the exercise remounts and reloads. */
+function morePracticeHref(subject: string, backHref: string): string {
+  const from = backHref === '/map' ? '&from=map' : backHref === '/status' ? '&from=status' : '';
+  return `/exercise?focus=${encodeURIComponent(subject)}&more=${Date.now()}${from}`;
+}
+
+/** Label + href for going back to where the session was opened from. */
+function backLabel(backHref: string): string {
+  return backHref === '/map' ? 'חזרה לנושאים' : backHref === '/status' ? 'חזרה למצב שלי' : 'חזרה למסע';
+}
+
 /** Loose comparison for typed answers: trim, lowercase, drop nikud, punctuation,
  *  final-letter forms and inner spaces so "42 " / "ארבעים ושתיים" grade fairly. */
 function normalizeAnswer(s: string): string {
@@ -89,7 +101,7 @@ export default function ExercisePage() {
 
 function ExerciseGate() {
   const sp = useSearchParams();
-  const key = `${sp.get('focus') ?? ''}|${sp.get('topic') ?? ''}|${sp.get('from') ?? ''}`;
+  const key = `${sp.get('focus') ?? ''}|${sp.get('topic') ?? ''}|${sp.get('from') ?? ''}|${sp.get('more') ?? ''}`;
   return <ExercisePageInner key={key} />;
 }
 
@@ -158,12 +170,14 @@ function ExercisePageInner() {
     const focus = params.get('focus');
     const topic = params.get('topic');
     const from = params.get('from');
+    const more = params.get('more');
     // Closing mid-session returns to where the session was opened from.
     setBackHref(from === 'map' ? '/map' : from === 'status' ? '/status' : '/');
     let url = '/api/lesson';
     if (focus) {
       url += `?focus=${encodeURIComponent(focus)}`;
       if (topic) url += `&topic=${encodeURIComponent(topic)}`;
+      if (more) url += '&more=1';
     }
     fetch(url)
       .then((r) => r.json())
@@ -402,15 +416,17 @@ function ExercisePageInner() {
     }
   }
 
+  const focusSubject = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('focus') : null;
   if (loading) return <Loader />;
-  if (allSolved) return <SubjectDone />;
+  if (allSolved) return <SubjectDone subject={focusSubject} backHref={backHref} />;
   if (finished) {
     // While settling up (or gliding into the next topic) we show the loader.
     if (nextInfo === null) return <Loader />;
     if (newBadges.length) return <BadgeCelebration badges={newBadges} next={nextInfo.next} />;
     // A next daily topic is handled by direct navigation in next(); reaching here
     // means the journey is done → celebrate.
-    return <Celebration earned={earned} correct={correct} answered={answered} results={results} xp={correct * 10} />;
+    return <Celebration earned={earned} correct={correct} answered={answered} results={results} xp={correct * 10}
+      subject={focusSubject} backHref={backHref} />;
   }
   if (!station) return <Loader />;
 
@@ -707,8 +723,9 @@ function ScoreRing({ pct }: { pct: number }) {
   );
 }
 
-function Celebration({ earned, correct, answered, results = [] }: { earned: number; correct: number; answered: number; xp?: number; results?: { stem: string; ok: boolean }[] }) {
+function Celebration({ earned, correct, answered, results = [], subject = null, backHref = '/' }: { earned: number; correct: number; answered: number; xp?: number; results?: { stem: string; ok: boolean }[]; subject?: string | null; backHref?: string }) {
   const pct = answered ? Math.round((correct / answered) * 100) : 100;
+  const fromJourney = backHref === '/';
   return (
     <main className="app-shell">
       <div className="screen-body cele">
@@ -737,9 +754,23 @@ function Celebration({ earned, correct, answered, results = [] }: { earned: numb
           <div className="rw"><b><CoinIcon /> +{earned}</b><span>מטבעות</span></div>
           <div className="rw"><b><FlameIcon /></b><span>שמרת על הרצף</span></div>
         </div>
-        <NextCTA />
+        {fromJourney ? (
+          <>
+            {subject && subject !== 'leadership' && (
+              <div className="cele-actions"><Link href={morePracticeHref(subject, backHref)} className="cta ghost">עוד תרגול בנושא</Link></div>
+            )}
+            <NextCTA />
+          </>
+        ) : (
+          <div className="cele-actions">
+            {subject && subject !== 'leadership' && (
+              <Link href={morePracticeHref(subject, backHref)} className="cta">עוד תרגול בנושא <span className="cta-ico"><ChevronIcon /></span></Link>
+            )}
+            <Link href={backHref} className="cta ghost">{backLabel(backHref)}</Link>
+          </div>
+        )}
       </div>
-      <BottomNav active="/" />
+      <BottomNav active={backHref === '/map' ? '/map' : backHref === '/status' ? '/status' : '/'} />
     </main>
   );
 }
@@ -804,7 +835,8 @@ function BadgeCelebration({ badges, next }: {
   );
 }
 
-function SubjectDone() {
+function SubjectDone({ subject, backHref }: { subject: string | null; backHref: string }) {
+  const active = backHref === '/map' ? '/map' : backHref === '/status' ? '/status' : '/';
   return (
     <main className="app-shell">
       <div className="screen-body cele">
@@ -812,9 +844,17 @@ function SubjectDone() {
         <div className="wow">כל הכבוד!</div>
         <Capi mood="cheer" size={120} />
         <h2>סיימת את השאלות כאן</h2>
-        <NextCTA />
+        <p className="cele-done-msg">ענית על כל השאלות בנושא הזה - אפשר לתרגל שוב או להמשיך.</p>
+        <div className="cele-actions">
+          {subject && subject !== 'leadership' && (
+            <Link href={morePracticeHref(subject, backHref)} className="cta">
+              עוד תרגול בנושא <span className="cta-ico"><ChevronIcon /></span>
+            </Link>
+          )}
+          <Link href={backHref} className="cta ghost">{backLabel(backHref)}</Link>
+        </div>
       </div>
-      <BottomNav active="/" />
+      <BottomNav active={active} />
     </main>
   );
 }
