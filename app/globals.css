@@ -272,6 +272,13 @@ a { color: inherit; text-decoration: none; }
 .ans-speak { width: 44px; height: auto; flex: none; align-self: stretch; border-radius: 14px; }
 .ans-speak .i { width: 19px; height: 19px; }
 .qtext { font-family: var(--font-display); font-weight: 700; font-size: 1.35rem; margin-top: 6px; text-wrap: balance; }
+.subj-hero { display: flex; justify-content: center; margin-bottom: 12px; }
+.subj-hero-badge {
+  width: 62px; height: 62px; border-radius: 20px; display: grid; place-items: center; color: #fff;
+  box-shadow: 0 10px 20px -10px rgba(0,0,0,.5); animation: heroPop .4s cubic-bezier(.2,1.4,.4,1) both;
+}
+.subj-hero-badge .i { width: 34px; height: 34px; }
+@keyframes heroPop { from { transform: scale(.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 .qdiagram { margin-top: 12px; display: flex; justify-content: center; background: var(--bg); border: 1px solid var(--line); border-radius: 14px; padding: 10px; }
 .qdiagram svg { max-width: 260px; }
 .qnote { color: var(--muted); font-weight: 600; font-size: .85rem; margin-top: 4px; }

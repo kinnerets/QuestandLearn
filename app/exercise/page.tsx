@@ -7,6 +7,7 @@ import { Capi, type CapiMood } from '@/components/Capi';
 import { BottomNav } from '@/components/BottomNav';
 import { SpeakButton } from '@/components/SpeakButton';
 import { QuestionDiagram } from '@/components/QuestionDiagram';
+import { SubjectHero } from '@/components/SubjectHero';
 import {
   CoinIcon, FlameIcon, CheckIcon, CloseIcon, HeartIcon, LEAD_ICON, GridIcon, ChevronIcon, StarIcon, MicIcon, BADGE_ICON,
 } from '@/components/icons';
@@ -450,6 +451,8 @@ function ExercisePageInner() {
             {station.kind === 'lead' ? station.position : `שאלה ${doneIdx.size + 1} מתוך ${stations.length}`}
           </span>
         </div>
+
+        {station.kind !== 'lead' && !station.diagram && <SubjectHero subject={station.subject} />}
 
         {station.kind === 'lead'
           ? <LeadView st={station} picked={chosenId} onPick={chooseLead} />
