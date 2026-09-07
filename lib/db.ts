@@ -88,7 +88,7 @@ function daySeed(): number {
 // read on almost every screen and changes rarely, so a few seconds of caching
 // removes most of the per-tap delay. New generated content shows within the TTL.
 const _bankCache = new Map<string, { at: number; data: { topics: TopicRow[]; qByTopic: Map<string, QRow[]> } }>();
-const BANK_TTL_MS = 45_000;
+const BANK_TTL_MS = 300_000; // 5 min - the bank changes rarely; keeps navigations warm
 
 /** Fetch every topic + question available to a grade (grade-specific + shared). */
 async function fetchBank(
@@ -764,21 +764,27 @@ export async function getDailyLesson(grade = 'grade_3', childId?: string, round 
     if (!topics.length) return null;
     const seed = daySeed();
 
-    // This child's mastery/review signals drive the weighted pick (Composer).
-    const sigs = childId ? await loadMasterySignals(sb, childId, topics.map((t) => t.id)) : new Map<string, MasterySig>();
-    const solved = childId ? await solvedQuestionIds(sb, childId) : new Set<string>();
+    // All the per-child signals are independent - fetch them in parallel (one
+    // round-trip instead of six) so the home page and every "next" load fast.
+    const [sigs, solved, interests, focus, focusTopicIds, locked]:
+      [Map<string, MasterySig>, Set<string>, string[], string[], string[], Set<string>] = childId
+      ? await Promise.all([
+          loadMasterySignals(sb, childId, topics.map((t) => t.id)),
+          solvedQuestionIds(sb, childId),
+          getChildInterests(childId),
+          getParentFocus(childId),
+          getParentFocusTopics(childId),
+          getLockedSubjects(sb),
+        ])
+      : [new Map<string, MasterySig>(), new Set<string>(), [], [], [], new Set<string>()];
     const jitterFor = (id: string) => ((seed + Number('0x' + id.slice(0, 6))) % 100) / 1000; // 0..0.099, day-stable
 
     // Interests nudge the mix toward subjects she loves; a parent "weekly focus"
     // nudges harder. Both can surface an enrichment subject into the journey.
-    const [interests, focus, focusTopicIds] = childId
-      ? await Promise.all([getChildInterests(childId), getParentFocus(childId), getParentFocusTopics(childId)])
-      : [[], [], []];
     const likedSubjects = subjectsForInterests(interests);
     const focusSubjects = new Set(focus);
     const focusTopics = new Set(focusTopicIds); // specific sub-topics a parent asked to reinforce
     const boostSubjects = new Set<string>([...likedSubjects, ...focusSubjects]);
-    const locked = boostSubjects.size ? await getLockedSubjects(sb) : new Set<string>();
     const boostOf = (subject: string) =>
       (focusSubjects.has(subject) ? 0.55 : 0) + (likedSubjects.has(subject) ? 0.3 : 0);
 

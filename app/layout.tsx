@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { Rubik, Assistant } from 'next/font/google';
 import './globals.css';
 import { CapiFab } from '@/components/CapiFab';
+import { MenuFab } from '@/components/MenuFab';
 
 const rubik = Rubik({
   subsets: ['hebrew', 'latin'],
@@ -47,6 +48,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           }}
         />
         {children}
+        <MenuFab />
         <CapiFab />
       </body>
     </html>

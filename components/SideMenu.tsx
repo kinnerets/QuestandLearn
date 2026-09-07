@@ -7,13 +7,13 @@ import { DisplaySettings } from './DisplaySettings';
 
 /** A slide-in side menu: switch child, enter the parent area, and set display
  *  preferences (theme + text size) in one place. Triggered from the home hero. */
-export function SideMenu({ canSwitch }: { canSwitch: boolean }) {
+export function SideMenu({ canSwitch, floating = false }: { canSwitch: boolean; floating?: boolean }) {
   const [open, setOpen] = useState(false);
   const close = () => setOpen(false);
 
   return (
     <>
-      <button className="menu-btn" aria-label="תפריט" onClick={() => setOpen(true)}>
+      <button className={`menu-btn${floating ? ' floating' : ''}`} aria-label="תפריט" onClick={() => setOpen(true)}>
         <MenuIcon />
       </button>
 
