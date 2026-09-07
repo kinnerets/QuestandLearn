@@ -132,6 +132,29 @@ export function Avatar({
           <circle cx="132" cy="58" r="5" fill="#FFD23F" />
         </g>
       )}
+      {/* accessory: star clip (premium) */}
+      {accessory_id === 'star' && (
+        <path d="M128 49 L130.2 54.9 L136.6 55.2 L131.6 59.2 L133.3 65.3 L128 61.8 L122.7 65.3 L124.4 59.2 L119.4 55.2 L125.8 54.9 Z"
+          fill="#FFD23F" stroke="#E0A400" strokeWidth="1.5" strokeLinejoin="round" />
+      )}
+      {/* accessory: earrings (premium) */}
+      {accessory_id === 'earrings' && (
+        <g stroke="#0C7CB5" strokeWidth="1">
+          <circle cx="62" cy="110" r="3.4" fill="#38BDF8" />
+          <circle cx="138" cy="110" r="3.4" fill="#38BDF8" />
+        </g>
+      )}
+      {/* accessory: sunglasses (premium) */}
+      {accessory_id === 'sunglasses' && (
+        <g>
+          <circle cx="84" cy="98" r="12" fill="#2A1D1A" />
+          <circle cx="116" cy="98" r="12" fill="#2A1D1A" />
+          <path d="M96 96 h8" stroke="#2A1D1A" strokeWidth="3" strokeLinecap="round" />
+          <path d="M72 94 l-9 -3M128 94 l9 -3" fill="none" stroke="#2A1D1A" strokeWidth="3" strokeLinecap="round" />
+          <ellipse cx="80" cy="94" rx="3" ry="2" fill="#fff" opacity="0.35" />
+          <ellipse cx="112" cy="94" rx="3" ry="2" fill="#fff" opacity="0.35" />
+        </g>
+      )}
     </svg>
   );
 }

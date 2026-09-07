@@ -28,6 +28,9 @@ const ACCESSORIES: OptDef<string | null>[] = [
   { id: 'flower', label: 'פרח', premium: true },
   { id: 'headphones', label: 'אוזניות', premium: true },
   { id: 'crown', label: 'כתר', premium: true },
+  { id: 'star', label: 'כוכב', premium: true },
+  { id: 'earrings', label: 'עגילים', premium: true },
+  { id: 'sunglasses', label: 'משקפי שמש', premium: true },
 ];
 const BASES = [
   { id: 'girl', label: 'ילדה' },

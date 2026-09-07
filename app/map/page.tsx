@@ -4,6 +4,7 @@ import { Capi } from '@/components/Capi';
 import { BottomNav } from '@/components/BottomNav';
 import { STATION_ICON, SUBJECT_ICON, ChevronIcon, SparkIcon } from '@/components/icons';
 import { getChildren, getSubjectCatalog, getCompassWorlds, type SubjectCard, type CompassWorld } from '@/lib/db';
+import { SUBJECT_COLOR } from '@/lib/constants';
 import { BookIcon, CoinIcon, StarIcon, HeartIcon } from '@/components/icons';
 import { selectedChildId } from '@/lib/session';
 
@@ -60,8 +61,10 @@ export default async function MapPage() {
           {subjects.map((s) => {
             const Icon = SUBJECT_ICON[s.subject] ?? STATION_ICON[s.kind];
             return (
-              <Link key={s.subject} href={`/exercise?focus=${s.subject}&from=map`} className="subject-card">
-                <span className={`subject-ico ico-${s.kind}`}><Icon /></span>
+              <Link key={s.subject} href={`/exercise?focus=${s.subject}&from=map`} className="subject-card"
+                style={SUBJECT_COLOR[s.subject] ? { ['--subj' as string]: SUBJECT_COLOR[s.subject] } : undefined}>
+                <span className={`subject-ico ico-${s.kind}`}
+                  style={SUBJECT_COLOR[s.subject] ? { background: SUBJECT_COLOR[s.subject] } : undefined}><Icon /></span>
                 <span className="subject-name">{s.label}</span>
                 <span className="subject-bar"><i className={tier(s.accuracy)} style={{ width: `${Math.round(s.accuracy * 100)}%` }} /></span>
                 <span className="subject-meta">

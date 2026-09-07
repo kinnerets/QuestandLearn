@@ -71,6 +71,20 @@ export function subjectsForInterests(interests: string[]): Set<string> {
   return out;
 }
 
+/** A distinct, kid-friendly accent colour per subject - used to tint the subject
+ *  icon tiles on the map and home so the subjects feel colourful and easy to tell
+ *  apart. Falls back to the kind colour when a subject isn't listed. */
+export const SUBJECT_COLOR: Record<string, string> = {
+  math: '#FF5CA8', geometry: '#F97316', hebrew: '#FF2A85', bible: '#A855F7',
+  english: '#38BDF8', arabic: '#22C55E', science: '#F5B301', geography: '#14B8A6',
+  history: '#C2703D', gifted: '#8B5CF6',
+  future_skills: '#F59E0B', economics: '#10B981', fashion: '#EC4899', politics: '#64748B',
+  ai: '#06B6D4', philosophy: '#6366F1', metacognition: '#0EA5E9', geopolitics: '#0D9488',
+  cognitive_bias: '#7C3AED', epigenetics: '#16A34A', procrastination: '#EF4444',
+  decision_making: '#EAB308', neuroplasticity: '#DB2777', financial_literacy: '#059669',
+  seasonal: '#E11D48',
+};
+
 /** Which station "kind" (icon/colour family) each subject belongs to. */
 export const SUBJECT_KIND: Record<string, 'core' | 'lang' | 'future' | 'lead'> = {
   math: 'core', geometry: 'core', hebrew: 'core', bible: 'core', science: 'future',

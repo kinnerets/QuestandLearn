@@ -10,6 +10,7 @@ import { HomeTasks } from './HomeTasks';
 import { TeamReward } from './TeamReward';
 import { mili, todayStations } from '@/lib/mockData';
 import { getChildren, getDailyLesson, getTodaySubjects, getSeasonalHighlight, getTeamChallenge } from '@/lib/db';
+import { SUBJECT_COLOR } from '@/lib/constants';
 import { selectedChildId } from '@/lib/session';
 import type { DailyStation } from '@/lib/types';
 
@@ -133,7 +134,8 @@ export default async function HomePage() {
               : `/exercise?focus=${s.subject}`;
             return (
               <Link key={`${s.subject}-${i}`} href={href} className={`mission${active ? ' active' : ''}${done ? ' done' : ''}`}>
-                <span className={`mission-ico ico-${s.kind}`}><Icon /></span>
+                <span className={`mission-ico ico-${s.kind}`}
+                  style={SUBJECT_COLOR[s.subject] ? { background: SUBJECT_COLOR[s.subject] } : undefined}><Icon /></span>
                 <span className="mission-txt">
                   <span className="mission-title">{s.subtitle}</span>
                 </span>
