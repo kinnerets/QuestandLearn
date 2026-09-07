@@ -10,6 +10,7 @@ interface Subj { subject: string; label: string; kind: string; accuracy: number;
 export function SubtopicFocusPanel({ childId, childName }: { childId?: string; childName?: string }) {
   const [data, setData] = useState<Subj[]>([]);
   const [focus, setFocus] = useState<Set<string>>(new Set());
+  const [subjFocus, setSubjFocus] = useState<Set<string>>(new Set());
   const [wrong, setWrong] = useState<Record<string, string[]>>({});
   const [open, setOpen] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -17,14 +18,16 @@ export function SubtopicFocusPanel({ childId, childName }: { childId?: string; c
   useEffect(() => {
     if (!childId) return;
     setLoaded(false);
-    fetch(`/api/parent/breakdown?childId=${encodeURIComponent(childId)}`)
-      .then((r) => r.json())
-      .then((j) => {
-        if (Array.isArray(j?.breakdown)) setData(j.breakdown);
-        if (Array.isArray(j?.focusTopics)) setFocus(new Set(j.focusTopics));
-        if (j?.recentWrong && typeof j.recentWrong === 'object') setWrong(j.recentWrong);
+    Promise.all([
+      fetch(`/api/parent/breakdown?childId=${encodeURIComponent(childId)}`).then((r) => r.json()).catch(() => null),
+      fetch(`/api/parent/focus?childId=${encodeURIComponent(childId)}`).then((r) => r.json()).catch(() => null),
+    ])
+      .then(([bd, sf]) => {
+        if (Array.isArray(bd?.breakdown)) setData(bd.breakdown);
+        if (Array.isArray(bd?.focusTopics)) setFocus(new Set(bd.focusTopics));
+        if (bd?.recentWrong && typeof bd.recentWrong === 'object') setWrong(bd.recentWrong);
+        if (Array.isArray(sf?.focus)) setSubjFocus(new Set(sf.focus));
       })
-      .catch(() => {})
       .finally(() => setLoaded(true));
   }, [childId]);
 
@@ -41,19 +44,35 @@ export function SubtopicFocusPanel({ childId, childName }: { childId?: string; c
     }).catch(() => {});
   }
 
+  async function toggleSubject(subject: string) {
+    const next = new Set(subjFocus);
+    if (next.has(subject)) next.delete(subject); else next.add(subject);
+    setSubjFocus(next);
+    await fetch('/api/parent/focus', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ childId, subjects: [...next] }),
+    }).catch(() => {});
+  }
+
   return (
-    <Section title="חיזוק לפי תת-נושא" count={focus.size || undefined}
-      hint={`בחרי תת-נושא לחיזוק${childName ? ` של ${childName}` : ''} - הוא יופיע יותר במסע היומי. נושא שעדיין לא תורגל אין לו ציון.`}>
+    <Section title="חיזוק לפי נושא ותת-נושא" count={(focus.size + subjFocus.size) || undefined}
+      hint={`חזקי נושא שלם, או פתחי אותו וחזקי תת-נושא ספציפי${childName ? ` של ${childName}` : ''} - מה שחיזקת יופיע יותר במסע היומי. נושא שעדיין לא תורגל אין לו ציון.`}>
       <div className="pfocus">
         {data.map((s) => {
           const isOpen = open === s.subject;
+          const subjOn = subjFocus.has(s.subject);
           return (
             <div key={s.subject} className={`pfocus-subj${isOpen ? ' open' : ''}`}>
-              <button className="pfocus-head" onClick={() => setOpen(isOpen ? null : s.subject)} aria-expanded={isOpen}>
-                <span className="pfocus-name">{s.label}</span>
-                <span className="pfocus-score">{s.answered > 0 ? `${Math.round(s.accuracy * 100)}%` : '-'}</span>
-                <span className={`pfocus-chev${isOpen ? ' up' : ''}`}><ChevronIcon /></span>
-              </button>
+              <div className="pfocus-head">
+                <button className="pfocus-toggle" onClick={() => setOpen(isOpen ? null : s.subject)} aria-expanded={isOpen}>
+                  <span className="pfocus-name">{s.label}</span>
+                  <span className="pfocus-score">{s.answered > 0 ? `${Math.round(s.accuracy * 100)}%` : '-'}</span>
+                  <span className={`pfocus-chev${isOpen ? ' up' : ''}`}><ChevronIcon /></span>
+                </button>
+                <button className={`pfocus-btn${subjOn ? ' on' : ''}`} onClick={() => toggleSubject(s.subject)}>
+                  {subjOn ? 'מחוזק' : 'חיזוק נושא'}
+                </button>
+              </div>
               {isOpen && (
                 <div className="pfocus-list">
                   {s.sub.map((t) => {

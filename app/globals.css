@@ -1002,8 +1002,11 @@ button.kbar-row { width: 100%; background: none; border: none; padding: 6px 0; c
 /* Parent: reinforce by sub-topic */
 .pfocus { display: flex; flex-direction: column; gap: 8px; }
 .pfocus-subj { border: 1px solid var(--line); border-radius: 13px; overflow: hidden; }
-.pfocus-head { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 10px;
-  background: var(--surface); border: none; padding: 12px 13px; cursor: pointer; }
+.pfocus-head { width: 100%; display: flex; align-items: center; gap: 8px;
+  background: var(--surface); padding: 10px 13px; }
+.pfocus-toggle { flex: 1; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  background: none; border: none; padding: 2px 0; cursor: pointer; }
+.pfocus-head .pfocus-btn { padding: 6px 12px; }
 .pfocus-name { font-family: var(--font-display); font-weight: 800; font-size: .95rem; color: var(--ink); }
 .pfocus-score { font-weight: 800; font-size: .82rem; color: var(--muted); font-variant-numeric: tabular-nums; }
 .pfocus-chev { color: var(--muted); transition: transform .2s; transform: rotate(-90deg); display: inline-flex; }
