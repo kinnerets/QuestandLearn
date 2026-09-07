@@ -7,7 +7,26 @@ import { CloseIcon, ChevronIcon } from '@/components/icons';
 
 interface Msg { role: 'user' | 'assistant'; text: string }
 
-const STARTERS = ['ספר לי עובדה מגניבה', 'איך זוכרים את לוח הכפל?', 'למה השמיים כחולים?', 'תן לי חידה'];
+// Riddle + fact are always offered; the rest rotate on each open.
+const FIXED_STARTERS = ['תן לי חידה', 'ספר לי עובדה מגניבה'];
+const STARTER_POOL = [
+  'איך זוכרים את לוח הכפל?',
+  'איך זוכרים מה ימין ומה שמאל?',
+  'איך קוראים את השעון?',
+  'למה השמיים כחולים?',
+  'ספר לי על בעל חיים מיוחד',
+  'איך אומרים שלום באנגלית?',
+  'מה זה שבר?',
+  'למה יש עונות בשנה?',
+  'איך מתחילים משימה גדולה?',
+  'ספר לי בדיחה נקייה',
+  'איזה כוכב הכי גדול?',
+  'איך זוכרים איך כותבים מילה קשה?',
+];
+function pickStarters(): string[] {
+  const rest = [...STARTER_POOL].sort(() => Math.random() - 0.5).slice(0, 2);
+  return [...FIXED_STARTERS, ...rest];
+}
 
 export default function CapiChatPage() {
   const [msgs, setMsgs] = useState<Msg[]>([
@@ -15,6 +34,7 @@ export default function CapiChatPage() {
   ]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
+  const [starters] = useState(pickStarters); // fresh mix each time the chat opens
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [msgs, busy]);
@@ -62,7 +82,7 @@ export default function CapiChatPage() {
         )}
         {msgs.length <= 1 && (
           <div className="chat-starters">
-            {STARTERS.map((s) => (
+            {starters.map((s) => (
               <button key={s} className="chat-starter" onClick={() => send(s)}>{s}</button>
             ))}
           </div>
