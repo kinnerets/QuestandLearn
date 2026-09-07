@@ -549,6 +549,29 @@ export async function revalidateExisting(maxTopics = 4): Promise<{ checked: numb
   }
 }
 
+/**
+ * Auto-clean the parent's review pile: permanently remove AI-generated questions
+ * that have sat flagged (hidden from the child) for over `days` without being
+ * approved. So a parent never has to work through flagged questions manually -
+ * bad ones expire on their own and the topic refills with fresh content.
+ */
+export async function purgeStaleFlagged(days = 7): Promise<number> {
+  const sb = getSupabase();
+  if (!sb) return 0;
+  try {
+    const cutoff = new Date(Date.now() - days * 86_400_000).toISOString();
+    const { data } = await sb.from('questions_bank')
+      .delete()
+      .eq('source', 'ai_generated')
+      .eq('verification_status', 'auto_flagged')
+      .lt('created_at', cutoff)
+      .select('id');
+    return (data ?? []).length;
+  } catch {
+    return 0;
+  }
+}
+
 export interface GlobalRefillResult { scanned: number; filledTopics: number; inserted: number }
 
 /**

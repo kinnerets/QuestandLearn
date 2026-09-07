@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { ChevronIcon } from '@/components/icons';
+import { SUBJECT_COLOR } from '@/lib/constants';
 import { Section } from './Section';
 
 interface SubStat { id: string; subTopic: string; accuracy: number; answered: number; solved: number; total: number }
@@ -70,7 +71,10 @@ export function SubtopicFocusPanel({ childId, childName }: { childId?: string; c
             <div key={s.subject} className={`pfocus-subj${isOpen ? ' open' : ''}`}>
               <div className="pfocus-head">
                 <button className="pfocus-toggle" onClick={toggleOpen} aria-expanded={isOpen}>
-                  <span className="pfocus-name">{s.label}</span>
+                  <span className="pfocus-namewrap">
+                    <span className="pfocus-dot" style={{ background: SUBJECT_COLOR[s.subject] ?? 'var(--muted)' }} />
+                    <span className="pfocus-name">{s.label}</span>
+                  </span>
                   <span className="pfocus-score">{s.answered > 0 ? `${Math.round(s.accuracy * 100)}%` : '-'}</span>
                   <span className={`pfocus-chev${isOpen ? ' up' : ''}`}><ChevronIcon /></span>
                 </button>

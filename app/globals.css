@@ -1032,6 +1032,8 @@ button.kbar-row { width: 100%; background: none; border: none; padding: 6px 0; c
 .pfocus-toggle { flex: 1; display: flex; align-items: center; justify-content: space-between; gap: 10px;
   background: none; border: none; padding: 2px 0; cursor: pointer; }
 .pfocus-head .pfocus-btn { padding: 6px 12px; }
+.pfocus-namewrap { display: inline-flex; align-items: center; }
+.pfocus-dot { flex: none; width: 12px; height: 12px; border-radius: 50%; display: inline-block; margin-inline-end: 8px; }
 .pfocus-name { font-family: var(--font-display); font-weight: 800; font-size: .95rem; color: var(--ink); }
 .pfocus-score { font-weight: 800; font-size: .82rem; color: var(--muted); font-variant-numeric: tabular-nums; }
 .pfocus-chev { color: var(--muted); transition: transform .2s; transform: rotate(-90deg); display: inline-flex; }

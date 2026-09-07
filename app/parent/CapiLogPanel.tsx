@@ -26,13 +26,16 @@ export function CapiLogPanel({ childId }: { childId?: string }) {
       .finally(() => setLoaded(true));
   }, [childId]);
 
-  if (!childId || !loaded || chats.length === 0) return null;
+  if (!childId || !loaded) return null;
 
   const flaggedCount = chats.filter((c) => c.flagged).length;
 
   return (
-    <Section title="שיחות עם קפי" count={chats.length}
+    <Section title="שיחות עם קפי" count={chats.length || undefined}
       hint="מה הבת שאלה את קפי לאחרונה. קפי מכוון ללמידה ולא מוסר תשובות לשיעורי בית.">
+      {chats.length === 0 && (
+        <p className="content-hint">עדיין אין שיחות לבת הזו. אם היא כן שוחחה עם קפי ולא מופיע כאן כלום, ודאי שהרצת את supabase/capi_chats.sql.</p>
+      )}
       {flaggedCount > 0 && (
         <div className="capi-alert">
           <FlagIcon />

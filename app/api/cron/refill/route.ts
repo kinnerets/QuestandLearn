@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { ensureGlobalBuffer, thinTopicCount, revalidateExisting } from '@/lib/generator';
+import { ensureGlobalBuffer, thinTopicCount, revalidateExisting, purgeStaleFlagged } from '@/lib/generator';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300; // several sequential generations per invocation
@@ -25,6 +25,8 @@ export async function GET(req: Request) {
   // Also re-check a few already-live topics against the hardened rules and hide
   // any that fail (self-cleanup of past output). Bounded to stay in the budget.
   const revalidated = await revalidateExisting(4);
+  // Auto-clear the parent's review pile: drop questions left flagged over a week.
+  const purged = await purgeStaleFlagged(7);
   const remaining = await thinTopicCount();
 
   // Self-chain: if we made progress and topics still need filling, kick the next
@@ -42,5 +44,5 @@ export async function GET(req: Request) {
     } catch { /* best-effort chaining */ }
   }
 
-  return NextResponse.json({ ok: true, ...result, remaining, revalidated });
+  return NextResponse.json({ ok: true, ...result, remaining, revalidated, purged });
 }
