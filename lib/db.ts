@@ -947,12 +947,30 @@ export async function composeFocus(
       const opts = (p.options ?? p.choices) as { icon?: string }[] | undefined;
       return !!p.prompt && Array.isArray(opts) && opts.length > 0 && opts.every((o) => !!o?.icon);
     };
+    // Dedupe by the question TEXT, not just its id: identical wording can exist
+    // as separate rows, so treat any wording the child already solved as solved,
+    // and never serve the same wording twice in one session.
+    const normStem = (s: string) => s.replace(/\s+/g, ' ').trim().toLowerCase();
+    const stemOf = (q: QRow) => normStem(String((q.payload as { stem?: unknown })?.stem ?? ''));
+    const solvedStems = new Set<string>();
+    if (!repeatable) {
+      for (const topic of subjectTopics) {
+        for (const q of qByTopic.get(topic.id) ?? []) {
+          if (solved.has(q.id)) { const s = stemOf(q); if (s) solvedStems.add(s); }
+        }
+      }
+    }
+
     const fresh: { topic: TopicRow; q: QRow }[] = [];
     const review: { topic: TopicRow; q: QRow }[] = [];   // already-solved, kept for padding
+    const seen = new Set<string>();                       // stems already queued as fresh
     for (const topic of subjectTopics) {
       for (const q of qByTopic.get(topic.id) ?? []) {
         if (repeatable && !validLead(q.payload)) continue; // drop broken lead content
-        if (repeatable || !solved.has(q.id)) fresh.push({ topic, q });
+        if (repeatable) { fresh.push({ topic, q }); continue; }
+        const s = stemOf(q);
+        const already = solved.has(q.id) || (!!s && solvedStems.has(s));
+        if (!already && s && !seen.has(s)) { seen.add(s); fresh.push({ topic, q }); }
         else review.push({ topic, q });
       }
     }
@@ -961,10 +979,18 @@ export async function composeFocus(
 
     // Prefer unsolved questions; if there aren't enough for a full session, pad
     // with already-solved ones (spaced review) so a sitting is never just 1-2.
+    // Final pass dedupes by wording so a session never repeats the same question.
     const want = focusLength(grade);
-    const pool = fresh.length >= want ? fresh.slice(0, want)
-      : fresh.length ? [...fresh, ...review].slice(0, want)
-        : [];                            // nothing new → let the caller show "done"
+    const ordered = fresh.length >= want ? fresh : [...fresh, ...review];
+    const pool: { topic: TopicRow; q: QRow }[] = [];
+    const used = new Set<string>();
+    for (const item of ordered) {
+      const s = stemOf(item.q);
+      if (s && used.has(s)) continue;
+      used.add(s);
+      pool.push(item);
+      if (pool.length >= want) break;
+    }
     if (!pool.length) return [];
 
     const stations = pool.map(({ topic, q }) => buildStation(kind, subject, topic, q));
