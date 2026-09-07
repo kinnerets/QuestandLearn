@@ -17,6 +17,7 @@ interface Kid {
   coins: number;
   streak: number;
   avatar: AvatarConfig;
+  started?: boolean;
 }
 
 const GRADE_LABEL: Record<string, string> = {
@@ -48,9 +49,12 @@ export default function ProfilesPage() {
     if (kid.id) {
       document.cookie = `${CHILD_COOKIE}=${kid.id}; path=/; max-age=31536000; samesite=lax`;
     }
-    // First time on this device for this child → guided onboarding; otherwise home.
+    // A child who already practiced never sees onboarding again (even on a new
+    // device). Otherwise, first time on this device → guided onboarding.
     let onboarded = true;
-    try { onboarded = !kid.id || !!localStorage.getItem('ql_onboarded_' + kid.id); } catch { onboarded = true; }
+    try {
+      onboarded = !kid.id || !!kid.started || !!localStorage.getItem('ql_onboarded_' + kid.id);
+    } catch { onboarded = true; }
     router.push(onboarded ? '/' : '/onboarding');
     router.refresh();
   }

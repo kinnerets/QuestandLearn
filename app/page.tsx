@@ -82,7 +82,7 @@ export default async function HomePage() {
 
   const doneCount = stations.filter((s) => s.status === 'done').length;
   const firstActive = stations.find((s) => s.status === 'active') ?? stations[0];
-  const needsPlacement = !!child && child.xp === 0;
+  const needsPlacement = !!child && !child.started && child.xp === 0;
 
   return (
     <main className="app-shell">

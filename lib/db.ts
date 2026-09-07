@@ -21,6 +21,7 @@ export interface ChildProfile {
   xp: number;
   avatar: AvatarConfig;
   goalMinutes: number;
+  started: boolean; // has any logged practice attempt (used to skip onboarding/placement)
 }
 
 export interface DbAcademicStation {
@@ -89,6 +90,11 @@ function daySeed(): number {
 // removes most of the per-tap delay. New generated content shows within the TTL.
 const _bankCache = new Map<string, { at: number; data: { topics: TopicRow[]; qByTopic: Map<string, QRow[]> } }>();
 const BANK_TTL_MS = 300_000; // 5 min - the bank changes rarely; keeps navigations warm
+
+// Short-lived cache of the family's child list (called on most pages). Stale
+// coins/xp for a few seconds is fine and saves two queries per navigation.
+let _childrenCache: { at: number; data: ChildProfile[] } | null = null;
+const CHILDREN_TTL_MS = 20_000;
 
 /** Fetch every topic + question available to a grade (grade-specific + shared). */
 async function fetchBank(
@@ -198,6 +204,7 @@ function toChild(data: Record<string, unknown>): ChildProfile {
     xp: (data.total_xp as number) ?? 0,
     avatar: data.avatar_config as AvatarConfig,
     goalMinutes: (data.daily_goal_minutes as number) ?? 15,
+    started: false,
   };
 }
 
@@ -238,6 +245,7 @@ export async function addXp(childId: string, amount: number): Promise<void> {
 export async function getChildren(): Promise<ChildProfile[] | null> {
   const sb = getSupabase();
   if (!sb) return null;
+  if (_childrenCache && Date.now() - _childrenCache.at < CHILDREN_TTL_MS) return _childrenCache.data;
   try {
     const { data, error } = await sb
       .from('users')
@@ -245,7 +253,17 @@ export async function getChildren(): Promise<ChildProfile[] | null> {
       .eq('role', 'child')
       .order('grade_level', { ascending: true });
     if (error || !data?.length) return null;
-    return data.map(toChild);
+    const children = data.map(toChild);
+    // Mark who has actually practiced (any logged attempt) - one batched query -
+    // so onboarding/placement never re-appear for a child who already started.
+    try {
+      const ids = children.map((c) => c.id);
+      const { data: att } = await sb.from('attempts_log').select('user_id').in('user_id', ids);
+      const active = new Set((att ?? []).map((r) => r.user_id as string));
+      for (const c of children) c.started = active.has(c.id);
+    } catch { /* leave started=false */ }
+    _childrenCache = { at: Date.now(), data: children };
+    return children;
   } catch {
     return null;
   }
