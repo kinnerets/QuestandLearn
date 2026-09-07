@@ -11,6 +11,15 @@ export default function InterestsPage() {
   const router = useRouter();
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [text, setText] = useState('');
+
+  function addCustom() {
+    const t = text.trim().slice(0, 30);
+    if (!t) return;
+    setStatus('idle');
+    setPicked((s) => new Set(s).add(t));
+    setText('');
+  }
 
   useEffect(() => {
     fetch('/api/interests')
@@ -65,6 +74,23 @@ export default function InterestsPage() {
               </button>
             );
           })}
+          {/* the child's own free-text interests */}
+          {[...picked].filter((id) => !INTERESTS.some((it) => it.id === id)).map((t) => (
+            <button key={t} className="interest-chip on" onClick={() => toggle(t)}>
+              <span className="interest-check"><CheckIcon /></span>
+              <span>{t}</span>
+            </button>
+          ))}
+        </div>
+
+        <div className="interest-add">
+          <input
+            className="interest-input" value={text} maxLength={30}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') addCustom(); }}
+            placeholder="משהו אחר שאת אוהבת…" autoComplete="off"
+          />
+          <button className="interest-add-btn" onClick={addCustom} disabled={!text.trim()}>הוספה</button>
         </div>
       </div>
 
