@@ -41,6 +41,7 @@ export async function askCapi(
   const system = `אתה "קפי" - קפיברה חכמה, רגועה וחברותית, המלווה של ${childName || 'הילדה'} (${gradeLabel}) באפליקציית לימוד לילדים.
 סגנון:
 - תמיד עברית פשוטה, חמה ומעודדת, בגובה העיניים של ילדה בגיל הזה.
+- כתוב אך ורק בעברית תקנית וברורה. אל תשלב אותיות או מילים באנגלית בתוך משפט עברי, ולעולם אל תדביק אותיות לטיניות למילה עברית (למשל "ההything" זו שגיאה). אם מילה יצאה שבורה או לא ברורה - נסח שוב במילים עבריות פשוטות ונכונות.
 - קצר: 1-3 משפטים. בלי אימוג'ים, ובלי סימני עיצוב כמו כוכביות (*) או Markdown - טקסט רגיל בלבד.
 - שפה ניטרלית מגדרית, מכבדת וחיובית. אם אינך יודע - אמור זאת בכנות ובעידוד.
 חידות ומשחקים:
@@ -68,16 +69,28 @@ export async function askCapi(
 
   try {
     const anthropic = new Anthropic({ apiKey, timeout: 20_000, maxRetries: 1 });
-    const resp = await anthropic.messages.create({
-      model: MODEL, max_tokens: 320, system, messages: msgs,
-    });
-    // A safety classifier may decline - treat that as a gentle deflection.
-    if (resp.stop_reason === 'refusal') {
-      return { ok: true, reply: 'זה נושא שכדאי לדבר עליו עם אמא או אבא. בוא נחזור ללמידה - על מה בא לך להתאמן?' };
+    let text = '';
+    // Up to two tries: if the model glues Latin letters into a Hebrew word
+    // (garbled output, e.g. "ההything"), regenerate once with a stricter note.
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const sys = attempt === 0 ? system
+        : `${system}\nחשוב מאוד: הפלט הקודם היה משובש. כתוב עכשיו אך ורק בעברית תקנית וברורה, בלי שום אות לטינית.`;
+      const resp = await anthropic.messages.create({ model: MODEL, max_tokens: 320, system: sys, messages: msgs });
+      // A safety classifier may decline - treat that as a gentle deflection.
+      if (resp.stop_reason === 'refusal') {
+        return { ok: true, reply: 'זה נושא שכדאי לדבר עליו עם אמא או אבא. בוא נחזור ללמידה - על מה בא לך להתאמן?' };
+      }
+      text = resp.content.filter((b) => b.type === 'text').map((b) => (b as { text: string }).text).join(' ').trim();
+      if (!isGarbled(text)) break;
     }
-    const text = resp.content.filter((b) => b.type === 'text').map((b) => (b as { text: string }).text).join(' ').trim();
     return { ok: true, reply: text || fallback };
   } catch {
     return { ok: false, reply: fallback };
   }
+}
+
+/** Detects garbled output where Latin letters are glued to Hebrew inside a word
+ *  (a known small-model glitch). Legit spaced English words are not flagged. */
+function isGarbled(text: string): boolean {
+  return /[A-Za-z][֐-׿]|[֐-׿][A-Za-z]/.test(text);
 }
