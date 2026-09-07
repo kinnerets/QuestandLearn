@@ -12,7 +12,7 @@ export function SubtopicFocusPanel({ childId, childName }: { childId?: string; c
   const [focus, setFocus] = useState<Set<string>>(new Set());
   const [subjFocus, setSubjFocus] = useState<Set<string>>(new Set());
   const [wrong, setWrong] = useState<Record<string, string[]>>({});
-  const [open, setOpen] = useState<string | null>(null);
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set()); // all open by default
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
@@ -59,12 +59,17 @@ export function SubtopicFocusPanel({ childId, childName }: { childId?: string; c
       hint={`חזקי נושא שלם, או פתחי אותו וחזקי תת-נושא ספציפי${childName ? ` של ${childName}` : ''} - מה שחיזקת יופיע יותר במסע היומי. נושא שעדיין לא תורגל אין לו ציון.`}>
       <div className="pfocus">
         {data.map((s) => {
-          const isOpen = open === s.subject;
+          const isOpen = !collapsed.has(s.subject);
           const subjOn = subjFocus.has(s.subject);
+          const toggleOpen = () => setCollapsed((c) => {
+            const n = new Set(c);
+            if (n.has(s.subject)) n.delete(s.subject); else n.add(s.subject);
+            return n;
+          });
           return (
             <div key={s.subject} className={`pfocus-subj${isOpen ? ' open' : ''}`}>
               <div className="pfocus-head">
-                <button className="pfocus-toggle" onClick={() => setOpen(isOpen ? null : s.subject)} aria-expanded={isOpen}>
+                <button className="pfocus-toggle" onClick={toggleOpen} aria-expanded={isOpen}>
                   <span className="pfocus-name">{s.label}</span>
                   <span className="pfocus-score">{s.answered > 0 ? `${Math.round(s.accuracy * 100)}%` : '-'}</span>
                   <span className={`pfocus-chev${isOpen ? ' up' : ''}`}><ChevronIcon /></span>

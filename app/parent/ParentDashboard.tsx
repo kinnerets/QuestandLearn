@@ -6,7 +6,6 @@ import { Avatar } from '@/components/Avatar';
 import { CoinIcon, FlameIcon, CloseIcon } from '@/components/icons';
 import { TasksPanel } from './TasksPanel';
 import { TaskApprovalsPanel } from './TaskApprovalsPanel';
-import { FocusPanel } from './FocusPanel';
 import { SubtopicFocusPanel } from './SubtopicFocusPanel';
 import { CapiLogPanel } from './CapiLogPanel';
 import { AssessmentsPanel } from './AssessmentsPanel';
@@ -88,8 +87,6 @@ export function ParentDashboard({ kids }: { kids: Kid[] }) {
             <ReportCard key={shown.id} kid={shown} />
           </div>
         )}
-
-        <FocusPanel childId={shown?.id} childName={shown?.name} />
 
         <SubtopicFocusPanel childId={shown?.id} childName={shown?.name} />
 
