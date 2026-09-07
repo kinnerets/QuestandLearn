@@ -1032,6 +1032,18 @@ button.kbar-row { width: 100%; background: none; border: none; padding: 6px 0; c
 .pfocus-toggle { flex: 1; display: flex; align-items: center; justify-content: space-between; gap: 10px;
   background: none; border: none; padding: 2px 0; cursor: pointer; }
 .pfocus-head .pfocus-btn { padding: 6px 12px; }
+/* Parent - interests view */
+.pint-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.pint-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 999px;
+  padding: 7px 8px 7px 12px; font-family: var(--font-display); font-weight: 700; font-size: .9rem; color: var(--ink);
+}
+.pint-chip.custom { border-color: var(--magenta); background: color-mix(in srgb, var(--magenta) 8%, var(--surface)); }
+.pint-tag { font-size: .68rem; font-weight: 800; color: var(--magenta-deep); }
+.pint-x { display: grid; place-items: center; width: 22px; height: 22px; border: none; border-radius: 50%;
+  background: var(--surface-2, rgba(0,0,0,.06)); color: var(--muted); cursor: pointer; }
+.pint-x .i { width: 13px; height: 13px; }
 .pfocus-namewrap { display: inline-flex; align-items: center; }
 .pfocus-dot { flex: none; width: 12px; height: 12px; border-radius: 50%; display: inline-block; margin-inline-end: 8px; }
 .pfocus-name { font-family: var(--font-display); font-weight: 800; font-size: .95rem; color: var(--ink); }

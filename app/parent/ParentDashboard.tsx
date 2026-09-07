@@ -7,6 +7,7 @@ import { CoinIcon, FlameIcon, CloseIcon } from '@/components/icons';
 import { TasksPanel } from './TasksPanel';
 import { TaskApprovalsPanel } from './TaskApprovalsPanel';
 import { SubtopicFocusPanel } from './SubtopicFocusPanel';
+import { InterestsViewPanel } from './InterestsViewPanel';
 import { CapiLogPanel } from './CapiLogPanel';
 import { AssessmentsPanel } from './AssessmentsPanel';
 import { RewardsPanel } from './RewardsPanel';
@@ -89,6 +90,8 @@ export function ParentDashboard({ kids }: { kids: Kid[] }) {
         )}
 
         <SubtopicFocusPanel childId={shown?.id} childName={shown?.name} />
+
+        <InterestsViewPanel childId={shown?.id} childName={shown?.name} />
 
         <TaskApprovalsPanel childId={shown?.id} childName={shown?.name} />
 
