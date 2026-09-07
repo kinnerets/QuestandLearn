@@ -12,7 +12,7 @@ export function SubtopicFocusPanel({ childId, childName }: { childId?: string; c
   const [focus, setFocus] = useState<Set<string>>(new Set());
   const [subjFocus, setSubjFocus] = useState<Set<string>>(new Set());
   const [wrong, setWrong] = useState<Record<string, string[]>>({});
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set()); // all open by default
+  const [open, setOpen] = useState<Set<string>>(new Set()); // sub-topics collapsed until tapped
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
@@ -55,13 +55,13 @@ export function SubtopicFocusPanel({ childId, childName }: { childId?: string; c
   }
 
   return (
-    <Section title="חיזוק לפי נושא ותת-נושא" count={(focus.size + subjFocus.size) || undefined}
+    <Section title="חיזוק לפי נושא ותת-נושא" count={(focus.size + subjFocus.size) || undefined} defaultOpen
       hint={`חזקי נושא שלם, או פתחי אותו וחזקי תת-נושא ספציפי${childName ? ` של ${childName}` : ''} - מה שחיזקת יופיע יותר במסע היומי. נושא שעדיין לא תורגל אין לו ציון.`}>
       <div className="pfocus">
         {data.map((s) => {
-          const isOpen = !collapsed.has(s.subject);
+          const isOpen = open.has(s.subject);
           const subjOn = subjFocus.has(s.subject);
-          const toggleOpen = () => setCollapsed((c) => {
+          const toggleOpen = () => setOpen((c) => {
             const n = new Set(c);
             if (n.has(s.subject)) n.delete(s.subject); else n.add(s.subject);
             return n;
