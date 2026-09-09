@@ -18,7 +18,7 @@ export function TasksPanel() {
     try {
       const r = await fetch('/api/parent/tasks');
       const j = await r.json();
-      if (Array.isArray(j?.tasks)) setTasks(j.tasks);
+      if (Array.isArray(j?.tasks)) setTasks([...j.tasks].sort((a, b) => b.coins - a.coins)); // by points, high first
     } catch { /* ignore */ }
   }
   useEffect(() => { load(); }, []);
@@ -49,7 +49,7 @@ export function TasksPanel() {
   }
 
   async function saveCoins(id: string) {
-    setTasks((ts) => ts.map((x) => (x.id === id ? { ...x, coins: editCoins } : x)));
+    setTasks((ts) => ts.map((x) => (x.id === id ? { ...x, coins: editCoins } : x)).sort((a, b) => b.coins - a.coins));
     setEditId(null);
     try {
       await fetch('/api/parent/tasks', {
