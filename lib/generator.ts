@@ -261,13 +261,19 @@ export async function generateForTopic(topicId: string, count = GENERATE): Promi
   // Arabic (transliterated vocab) and the gifted reasoning items need exactly one
   // correct option, so keep them multiple-choice; everything else varies its types.
   const restrictMC = topic.subject === 'arabic' || topic.subject === 'gifted';
+  // type_in fits factual subjects with a short unambiguous answer. It's a bad fit
+  // for the abstract enrichment subjects, where it turns into "name the concept"
+  // (jargon recall) - so it's disabled there.
+  const TYPE_IN_OK = new Set(['math', 'geometry', 'hebrew', 'english', 'arabic', 'science', 'bible', 'history', 'geography']);
+  const allowTypeIn = TYPE_IN_OK.has(topic.subject);
   const typesNote = restrictMC
     ? 'סוג השאלות: כולן multiple_choice עם 4 אפשרויות (a,b,c,d) ובדיוק תשובה נכונה אחת. מלא choices ו-correct_choice_id. (qtype="multiple_choice").'
     : `גוון את סוגי השאלות במנה (קבע שדה qtype לכל שאלה, ומלא רק את השדות של אותו סוג):
 - רוב השאלות multiple_choice: 4 אפשרויות (a,b,c,d) ותשובה נכונה אחת (choices + correct_choice_id).
 - שלב גם multi_select: 4 אפשרויות, אך 2 או 3 מהן נכונות (choices + correct_choice_ids עם כל הנכונות, ולפחות אפשרות אחת שגויה). נסח את גוף השאלה כך שברור שיש כמה תשובות (למשל "אילו מהבאים נכונים?").
-- שלב גם true_false: קביעה אחת, וב-answer_bool אם היא נכונה (true) או לא (false). בלי choices.
-- שלב גם type_in: שאלה עם תשובה קצרה וחד-משמעית (מילה אחת או מספר) שהילדה כותבת; ב-answers רשום את כל הצורות המקובלות. אל תשתמש ב-type_in לשאלה פתוחה או רב-משמעית.`;
+- שלב גם true_false: קביעה אחת, וב-answer_bool אם היא נכונה (true) או לא (false). בלי choices.${allowTypeIn ? `
+- שלב גם type_in: שאלה עם תשובה קצרה וחד-משמעית (מילה אחת או מספר) שהילדה כותבת; ב-answers רשום את כל הצורות המקובלות. אל תשתמש ב-type_in לשאלה פתוחה או רב-משמעית, ולעולם אל תבקש "שם את התהליך/המושג".` : `
+- אל תשתמש ב-type_in בנושא הזה. בשום מקרה אל תבקש מהילדה לכתוב שם של מושג או תהליך.`}`;
 
   const diagramNote = topic.subject === 'geometry'
     ? ` המחשה: כשהשאלה עוסקת בצורה, הוסף שדה diagram שמתאר אותה בדיוק לפי הנתונים בשאלה - kind ("rect"/"square"/"triangle"/"circle") והמידות (w,h; s לריבוע; base,height למשולש; r לרדיוס) ו-unit (יחידת מידה, למשל "ס״מ"). המידות ב-diagram חייבות להתאים למספרים שבשאלה.`
@@ -302,7 +308,8 @@ ${groundTruthFor(topic.subject, topic.grade)}
 עברית ונוסח (חשוב מאוד):
 - עברית תקנית, טבעית וברורה. משפט שאלה שלם ומדויק, בלי שגיאות ובלי ניסוח מגושם או מבלבל.
 - כל מילה חייבת להיות מילה אמיתית ומאויתת נכון בעברית. אל תמציא מילים ואל תשבש איות (למשל כתוב "מוצף" ולא "מוכמן", "מתחיל" ולא "בתחיל"). קרא שוב כל משפט לפני שאתה שולח.
-- בנושאי חשיבה/העשרה: אל תבקש מהילדה לנחש שם של מונח מקצועי ("איך קוראים ל..."); שאל על ההבנה של הרעיון. כל מונח שמופיע כתשובה חייב להיות ביטוי עברי אמיתי ומקובל (לא המצאה).
+- בנושאי חשיבה/העשרה: אל תבקש מהילדה לנחש שם של מונח מקצועי ("איך קוראים ל...", "שם את התהליך"); שאל על ההבנה של הרעיון. כל מונח שמופיע כתשובה חייב להיות ביטוי עברי אמיתי ומקובל (לא המצאה).
+- דקדוק תקין חובה: התאמת מין/מספר ומילות קישור נכונות. למשל "החלטה חכמה" (לא "חוכמה"), "בין שתי אפשרויות" (לא "בין שני עקרונות"). קרא כל משפט שוב ותקן ניסוח מגושם.
 - אל תחשוף את התשובה בתוך השאלה. במיוחד בשאלות אוצר מילים (אנגלית/ערבית): אל תזכיר את המילה הנכונה בגוף השאלה. נסח נקי, למשל "איזו מילה באנגלית מתארת משהו גדול מאוד?" (ולא להזכיר את enormous/huge בשאלה).
 - בשאלות בחירה: כל ארבע האפשרויות מאותה קטגוריה והגיוניות; ב-multiple_choice רק אחת נכונה, וב-multi_select 2-3 נכונות. אל תסמן תשובה נכונה שאינה באמת נכונה.${nikudNote}`;
 
@@ -367,6 +374,7 @@ ${groundTruthFor(topic.subject, topic.grade)}
       payload = { ...base, answer: raw.answer_bool };
       vi = { stem, qtype: 'true_false', correct: raw.answer_bool ? 't' : 'f' };
     } else if (qtype === 'type_in') {
+      if (!allowTypeIn) continue; // no fill-in for abstract subjects (avoids "name the concept")
       const answers = Array.isArray(raw.answers) ? raw.answers.map((a) => String(a).trim()).filter(Boolean) : [];
       if (!answers.length) continue;
       type = 'type_in';
