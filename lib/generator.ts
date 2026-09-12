@@ -244,7 +244,13 @@ export async function generateForTopic(topicId: string, count = GENERATE): Promi
     .eq('id', topicId).maybeSingle();
   if (!topic) return { inserted: 0, reason: 'no-topic' };
 
-  const { data: existing } = await sb.from('questions_bank').select('payload').eq('topic_id', topicId);
+  // Dedup against the whole SUBJECT (all grades/topics), not just this topic, so
+  // the same wording can't appear in two topics or for both children.
+  const { data: sibTopics } = await sb.from('curriculum_topics').select('id').eq('subject', topic.subject);
+  const sibIds = (sibTopics ?? []).map((t) => t.id as string);
+  const { data: existing } = sibIds.length
+    ? await sb.from('questions_bank').select('payload').in('topic_id', sibIds)
+    : { data: [] as { payload: unknown }[] };
   const existingStems = new Set(
     (existing ?? []).map((r) => norm(String((r.payload as Record<string, unknown>)?.stem ?? ''))),
   );
@@ -308,7 +314,7 @@ explanation: משפט קצר שמסביר למה התשובה נכונה.
 ${gradeRules(topic.grade)}
 ${groundTruthFor(topic.subject, topic.grade) ? `מקור אמת לנושא (הישאר בתוך הגבולות והעובדות האלה בלבד):
 ${groundTruthFor(topic.subject, topic.grade)}
-` : ''}גיוון (חשוב): שנה בין השאלות את המספרים, הערכים וההקשרים - אל תשאל את אותו תרגיל שוב בניסוח אחר (למשל לא לחזור על "25% מתוך 100" עם מילים שונות). כל שאלה צריכה חישוב או תוכן שונה ממש.
+` : ''}גיוון (חשוב): שנה בין השאלות את המספרים, הערכים וההקשרים - אל תשאל את אותו תרגיל שוב בניסוח אחר (למשל לא לחזור על "25% מתוך 100" עם מילים שונות). כל שאלה צריכה חישוב או תוכן שונה ממש. אל תיצור במנה שתי שאלות שבודקות את אותו רעיון או אותה השוואה (למשל "מה גדול יותר, חצי או שליש?" פעמיים בניסוחים שונים) - כל שאלה בודקת דבר אחר.
 עברית ונוסח (חשוב מאוד):
 - עברית תקנית, טבעית וברורה. משפט שאלה שלם ומדויק, בלי שגיאות ובלי ניסוח מגושם או מבלבל.
 - כל מילה חייבת להיות מילה אמיתית ומאויתת נכון בעברית. אל תמציא מילים ואל תשבש איות (למשל כתוב "מוצף" ולא "מוכמן", "מתחיל" ולא "בתחיל"). קרא שוב כל משפט לפני שאתה שולח.

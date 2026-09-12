@@ -1580,9 +1580,23 @@ export async function completeQuest(coinsEarned: number, childId?: string, xpEar
     const decayed = Math.round(coinsEarned * factor);
     const grant = Math.max(0, Math.min(decayed, DAILY_COIN_CAP - alreadyAwarded));
 
+    // Real consecutive-day streak: on the first completion today, continue the
+    // streak only if she also completed one YESTERDAY; otherwise it restarts at 1.
+    // (Previously it just incremented on any active day, so gaps didn't reset it.)
+    let newStreak = child.streak;
+    if (firstToday) {
+      const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+      const { data: yRow } = await sb
+        .from('daily_progress')
+        .select('quest_completed')
+        .eq('user_id', child.id).eq('date', yesterday)
+        .maybeSingle();
+      newStreak = yRow?.quest_completed ? child.streak + 1 : 1;
+    }
+
     await sb.from('users').update({
       quest_coins: child.coins + grant,
-      current_streak: firstToday ? child.streak + 1 : child.streak,
+      current_streak: newStreak,
       total_xp: child.xp + Math.max(0, xpEarned),
     }).eq('id', child.id);
 
