@@ -24,7 +24,7 @@ export async function GET(req: Request) {
   const result = await ensureGlobalBuffer(6);
   // Also re-check a few already-live topics against the hardened rules and hide
   // any that fail (self-cleanup of past output). Bounded to stay in the budget.
-  const revalidated = await revalidateExisting(4);
+  const revalidated = await revalidateExisting(8);
   // Auto-clear the parent's review pile: drop questions left flagged over a week.
   const purged = await purgeStaleFlagged(7);
   // Self-heal duplicate questions across subjects (same wording shown to both kids).
