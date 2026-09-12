@@ -15,6 +15,27 @@ const GENERATE = 6;    // …ask for this many new ones per call. Small batches 
 
 const norm = (s: string) => s.replace(/\s+/g, ' ').trim().toLowerCase();
 
+// High-confidence Hebrew spelling fixes for typos the model repeats (usually a
+// dropped yod in ktiv male). Deterministic belt-and-suspenders on top of the
+// validator, so a stray "גלדה" never reaches a child. Extend as new ones surface.
+// Keys are the exact misspelling; matched as a standalone word (allowing a single
+// attached prefix letter like ו/ה/ב/ל/כ/מ/ש) so we never corrupt a longer word.
+const SPELL_FIX: Record<string, string> = {
+  'גלדה': 'גלידה',
+  'גלדות': 'גלידות',
+};
+const HEB = '֐-׿';
+const SPELL_RE = new RegExp(
+  `(^|[^${HEB}])([והבלכמש]?)(${Object.keys(SPELL_FIX).join('|')})(?![${HEB}])`,
+  'g',
+);
+/** Correct known misspellings anywhere in a text field. Leaves everything else
+ *  untouched; only whole-word (optionally single-prefix) matches are replaced. */
+function fixSpelling(s: string): string {
+  if (!s) return s;
+  return s.replace(SPELL_RE, (_m, pre, prefix, word) => `${pre}${prefix}${SPELL_FIX[word] ?? word}`);
+}
+
 /** Validate a model-provided diagram spec; return a clean spec or undefined so a
  *  malformed illustration is simply dropped (the question still works). */
 function validateDiagram(d: unknown): DiagramSpec | undefined {
@@ -184,7 +205,7 @@ async function verifyQuestions(apiKey: string, items: VerifyItem[], context: str
 - בשאלת רב-ברירה עם כמה נכונות (multi_select): לא כל התשובות הנכונות סומנו ✓, או שסומנה תשובה שגויה, או שאין בדיוק חלוקה ברורה בין נכונות ללא-נכונות.
 - בשאלת השלמה (type_in): התשובה המתקבלת שגויה, או שיש תשובות נכונות נוספות שחסרות ברשימה (השאלה חייבת להיות חד-משמעית).
 - טעות עובדתית, ערבוב בין סיפורים/דמויות/אירועים, או ניסוח מבלבל.
-- יש שגיאת כתיב, מילה משובשת, או מילה שאינה קיימת בעברית (למשל "מוכמן", "בתחיל") - בכל מקום בשאלה, בתשובות, ברמזים או בהסבר.
+- יש שגיאת כתיב, מילה משובשת, או מילה שאינה קיימת בעברית (למשל "מוכמן", "בתחיל", או חוסר אות כמו "גלדה" במקום "גלידה") - בכל מקום בשאלה, בתשובות, ברמזים או בהסבר. בדוק כל מילה בנפרד.
 - ניסוח עברי מגושם/לא תקין, או שהתשובה הנכונה היא מונח מומצא/לא מקובל (למשל "התגברות ההמון" במקום "אפקט העדר"), או ששאלת ההעשרה מבקשת לנחש שם של מונח מקצועי שילד לא מכיר.
 - דורשת ידע נדיר או קריאת טקסט ספציפי שילד בגיל הזה לא בהכרח למד.
 - שאלה טריוויאלית ללא ערך לימודי: התשובה הנכונה כתובה כמעט מילה-במילה בגוף השאלה (למשל "כשירד גשם לקחנו מטרייה. למה לקחנו מטרייה?" -> "כי ירד גשם"). שאלה חייבת ללמד משהו (הבנה, אוצר מילים, כלל), לא רק להעתיק.
@@ -420,6 +441,23 @@ ${groundTruthFor(topic.subject, topic.grade)}
     verifyItems.push(vi);
   }
   if (!rows.length) return { inserted: 0, reason: 'all-duplicates' };
+
+  // Deterministic spelling repair: fix known typos (e.g. "גלדה" -> "גלידה") in
+  // every text field before the question is ever shown, catching the cases the
+  // (same-model) validator can miss.
+  for (const r of rows) {
+    const p = r.payload as Record<string, unknown>;
+    if (typeof p.stem === 'string') p.stem = fixSpelling(p.stem);
+    if (typeof p.explanation === 'string') p.explanation = fixSpelling(p.explanation);
+    if (typeof p.hint === 'string') p.hint = fixSpelling(p.hint);
+    if (Array.isArray(p.hints)) p.hints = (p.hints as unknown[]).map((h) => typeof h === 'string' ? fixSpelling(h) : h);
+    if (Array.isArray(p.answers)) p.answers = (p.answers as unknown[]).map((a) => typeof a === 'string' ? fixSpelling(a) : a);
+    if (Array.isArray(p.choices)) {
+      for (const c of p.choices as { text?: unknown }[]) {
+        if (c && typeof c.text === 'string') c.text = fixSpelling(c.text);
+      }
+    }
+  }
 
   // Never let a hint give away the answer: drop any hint that contains the correct
   // answer's text (a common model slip). Falls back to a generic nudge if needed.

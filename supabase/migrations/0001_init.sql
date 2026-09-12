@@ -80,7 +80,9 @@ create table user_mastery (
 create table attempts_log (
   id               uuid primary key default gen_random_uuid(),
   user_id          uuid not null references users(id) on delete cascade,
-  question_id      uuid not null references questions_bank(id) on delete cascade,
+  -- Keep the attempt (topic_id + is_correct drive accuracy) when the question it
+  -- referred to is deleted by a reset/purge - do NOT cascade the history away.
+  question_id      uuid references questions_bank(id) on delete set null,
   topic_id         uuid not null references curriculum_topics(id) on delete cascade,
   is_correct       boolean not null,
   chosen_answer    jsonb,

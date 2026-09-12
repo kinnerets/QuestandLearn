@@ -115,6 +115,7 @@ function ExercisePageInner() {
   const [stations, setStations] = useState<Station[]>([]);
   const [loading, setLoading] = useState(true);
   const [allSolved, setAllSolved] = useState(false);
+  const [preparingMore, setPreparingMore] = useState(false); // "עוד תרגול" but bank not ready yet
   const [coins, setCoins] = useState(mili.quest_coins);
   const [earned, setEarned] = useState(0);
   const [finished, setFinished] = useState(false);
@@ -186,6 +187,10 @@ function ExercisePageInner() {
         if (!alive) return;
         const lesson = Array.isArray(j?.lesson) ? (j.lesson as DbStation[]) : null;
         if (lesson && lesson.length) setStations(mapDbLesson(lesson));
+        // Extra-practice ("עוד תרגול") with nothing to re-serve yet (e.g. the
+        // subject's bank was just refreshed): don't dead-end on a "done" screen -
+        // kick a refill and invite her to try again in a moment.
+        else if (focus && more && lesson && lesson.length === 0) { setPreparingMore(true); fireRefill(); }
         else if (focus && lesson && lesson.length === 0) { setAllSolved(true); fireRefill(); } // solved everything → make more
         else setStations(bundledLesson); // mock / no DB
         if (typeof j?.coins === 'number') setCoins(j.coins);
@@ -419,6 +424,7 @@ function ExercisePageInner() {
 
   const focusSubject = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('focus') : null;
   if (loading) return <Loader />;
+  if (preparingMore) return <PreparingMore subject={focusSubject} backHref={backHref} />;
   if (allSolved) return <SubjectDone subject={focusSubject} backHref={backHref} />;
   if (finished) {
     // While settling up (or gliding into the next topic) we show the loader.
@@ -834,6 +840,32 @@ function BadgeCelebration({ badges, next }: {
           <Link href="/" className="cta ghost">חזרה למסע</Link>
         </div>
       </div>
+    </main>
+  );
+}
+
+/** "עוד תרגול" was tapped but the subject's bank has nothing to re-serve yet
+ *  (a refresh is in flight). Instead of a dead-end, keep her in the subject with
+ *  a friendly wait + a real retry (fresh questions arrive within a few seconds). */
+function PreparingMore({ subject, backHref }: { subject: string | null; backHref: string }) {
+  const router = useRouter();
+  const active = backHref === '/map' ? '/map' : backHref === '/status' ? '/status' : '/';
+  return (
+    <main className="app-shell">
+      <div className="screen-body cele">
+        <Capi mood="chill" size={110} />
+        <h2>מכינות לך עוד שאלות</h2>
+        <p className="cele-done-msg">עוד רגע קטן והשאלות החדשות מוכנות. אפשר לנסות שוב עוד כמה שניות.</p>
+        <div className="cele-actions">
+          {subject && subject !== 'leadership' && (
+            <button className="cta" onClick={() => router.push(morePracticeHref(subject, backHref))}>
+              נסי שוב <span className="cta-ico"><ChevronIcon /></span>
+            </button>
+          )}
+          <Link href={backHref} className="cta ghost">{backLabel(backHref)}</Link>
+        </div>
+      </div>
+      <BottomNav active={active} />
     </main>
   );
 }
