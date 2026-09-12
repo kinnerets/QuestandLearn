@@ -46,16 +46,41 @@ export function SpeakButton({ text, className = '' }: { text: string; className?
     } catch { return undefined; }
   }
 
+  // Read English/Arabic text with a matching voice (not the Hebrew one), and a
+  // slower rate - a Hebrew voice reading English sounds fast and garbled.
+  function detectLang(t: string): 'en' | 'ar' | 'he' {
+    const heb = (t.match(/[֐-׿]/g) || []).length;
+    const lat = (t.match(/[A-Za-z]/g) || []).length;
+    const ara = (t.match(/[؀-ۿ]/g) || []).length;
+    if (lat > heb && lat >= ara) return 'en';
+    if (ara > heb && ara > lat) return 'ar';
+    return 'he';
+  }
+  function voiceFor(prefix: string) {
+    try { return window.speechSynthesis.getVoices().find((v) => (v.lang || '').toLowerCase().startsWith(prefix)); }
+    catch { return undefined; }
+  }
+
   function toggle() {
     try {
       const synth = window.speechSynthesis;
       if (speaking) { synth.cancel(); setSpeaking(false); return; }
       synth.cancel();
       const u = new SpeechSynthesisUtterance(textRef.current);
-      u.lang = 'he-IL';
-      const v = hebrewVoice();
-      if (v) u.voice = v;
-      u.rate = 0.95;
+      const lang = detectLang(textRef.current);
+      if (lang === 'en') {
+        u.lang = 'en-US';
+        const v = voiceFor('en'); if (v) u.voice = v;
+        u.rate = 0.7; // slower, clear English for a young learner
+      } else if (lang === 'ar') {
+        u.lang = 'ar';
+        const v = voiceFor('ar'); if (v) u.voice = v;
+        u.rate = 0.75;
+      } else {
+        u.lang = 'he-IL';
+        const v = hebrewVoice(); if (v) u.voice = v;
+        u.rate = 0.9;
+      }
       u.onend = () => setSpeaking(false);
       u.onerror = () => setSpeaking(false);
       setSpeaking(true);

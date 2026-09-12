@@ -95,7 +95,7 @@ const BANK_TTL_MS = 300_000; // 5 min - the bank changes rarely; keeps navigatio
 // Short-lived cache of the family's child list (called on most pages). Stale
 // coins/xp for a few seconds is fine and saves two queries per navigation.
 let _childrenCache: { at: number; data: ChildProfile[] } | null = null;
-const CHILDREN_TTL_MS = 20_000;
+const CHILDREN_TTL_MS = 8_000;
 
 /** Fetch every topic + question available to a grade (grade-specific + shared). */
 async function fetchBank(
@@ -1022,7 +1022,10 @@ export async function composeFocus(
     // first (keeping their order), so sessions rotate instead of repeating.
     const freshOrdered = repeatable ? fresh
       : [...fresh.filter((f) => !recentlySeen.has(f.q.id)), ...fresh.filter((f) => recentlySeen.has(f.q.id))];
-    const ordered = freshOrdered.length >= want ? freshOrdered : [...freshOrdered, ...review];
+    // Only serve UNSOLVED questions. Never pad with already-solved ones - a
+    // correctly-answered question should not come back (except explicit "עוד
+    // תרגול", handled above). A short session just triggers a refill for more.
+    const ordered = freshOrdered;
     const pool: { topic: TopicRow; q: QRow }[] = [];
     const used = new Set<string>();
     for (const item of ordered) {
@@ -1604,6 +1607,7 @@ export async function completeQuest(coinsEarned: number, childId?: string, xpEar
       user_id: child.id, date: today, stations_completed: 4,
       quest_completed: true, coins_awarded_today: alreadyAwarded + grant,
     });
+    _childrenCache = null; // coins/streak/xp changed - refresh the child list
     return grant;
   } catch {
     return 0;
@@ -2163,6 +2167,7 @@ export async function completeHomeTask(childId: string, taskId: string): Promise
     if (insErr2) return { ok: false, reason: 'already' };
     const coins = child.coins + earned;
     await sb.from('users').update({ quest_coins: coins }).eq('id', childId);
+    _childrenCache = null;
     return { ok: true, coins, earned };
   } catch {
     return { ok: false, reason: 'error' };
@@ -2223,7 +2228,10 @@ export async function resolveTaskApproval(id: string, action: 'approve' | 'rejec
       getChildProfileById(row.child_id as string),
     ]);
     const earned = (task?.coins as number) ?? 0;
-    if (child) await sb.from('users').update({ quest_coins: child.coins + earned }).eq('id', row.child_id as string);
+    if (child) {
+      await sb.from('users').update({ quest_coins: child.coins + earned }).eq('id', row.child_id as string);
+      _childrenCache = null; // coins changed - don't serve a stale balance
+    }
     await sb.from('home_task_done').update({ status: 'approved' }).eq('id', id);
     return true;
   } catch {
