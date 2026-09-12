@@ -308,7 +308,7 @@ export async function generateForTopic(topicId: string, count = GENERATE): Promi
 קהל היעד: ${gradeAge}. חשוב מאוד: התאם את רמת הקושי לגיל האמיתי - שאלות לכיתה ה׳ צריכות להיות מאתגרות ובעומק המתאים (למשל בעברית: הבחנה בין עובדה לדעה, משמעות בהקשר, מבנה טיעון; בחשבון: שברים, אחוזים, בעיות מילוליות רב-שלביות), לא ידע בסיסי מדי.
 ${typesNote}
 difficulty: דרג את קושי השאלה 1-5 ביחס לגיל.
-hints: מערך של בדיוק 2 רמזים מדורגים - רמז 1 כיוון עדין, רמז 2 חזק וממוקד יותר. אל תחשוף את התשובה ברמזים.
+hints: מערך של בדיוק 2 רמזים מדורגים - רמז 1 כיוון עדין, רמז 2 חזק וממוקד יותר. אסור לחלוטין שרמז יכיל את התשובה או ירמוז עליה ישירות (למשל בשאלה "כמה ס"מ במטר?" רמז כמו "יש 100" או "התשובה 100" - פסול; רמז טוב: "חשבי בקפיצות של עשרות"). הרמז מכוון לחשיבה, לא מוסר את הפתרון.
 explanation: משפט קצר שמסביר למה התשובה נכונה.
 לפחות מסיח שגוי אחד עם שדה misconception קצר באנגלית.
 עברית תקנית וידידותית. בלי אימוגי. גיוון גבוה בין השאלות.
@@ -420,6 +420,25 @@ ${groundTruthFor(topic.subject, topic.grade)}
     verifyItems.push(vi);
   }
   if (!rows.length) return { inserted: 0, reason: 'all-duplicates' };
+
+  // Never let a hint give away the answer: drop any hint that contains the correct
+  // answer's text (a common model slip). Falls back to a generic nudge if needed.
+  for (const r of rows) {
+    const p = r.payload as Record<string, unknown>;
+    const choices = (p.choices as { id: string; text: string }[]) ?? [];
+    let reveals: string[] = [];
+    if (r.type === 'multiple_choice') reveals = [choices.find((c) => c.id === p.correct_choice_id)?.text ?? ''];
+    else if (r.type === 'multi_select') reveals = ((p.correct_choice_ids as string[]) ?? []).map((id) => choices.find((c) => c.id === id)?.text ?? '');
+    else if (r.type === 'type_in') reveals = (p.answers as string[]) ?? [];
+    const bad = reveals.map(norm).filter((s) => s.length >= 1);
+    const kept = (Array.isArray(p.hints) ? (p.hints as string[]) : []).filter((h) => {
+      const n = norm(h);
+      return !bad.some((b) => n.includes(b));
+    });
+    const clean = kept.length ? kept : ['תחשבי שוב לאט - מה השאלה בעצם מבקשת?'];
+    p.hints = clean;
+    p.hint = clean[0] ?? '';
+  }
 
   // Second-pass verification: anything the checker flags is held for parent review.
   const flagged = await verifyQuestions(apiKey, verifyItems, `${subjectLabel} · ${gradeLabel}`, gradeRules(topic.grade), groundTruthFor(topic.subject, topic.grade));
