@@ -911,6 +911,26 @@ async function solvedQuestionIds(
   }
 }
 
+/** Question ids the child attempted in the last `days` (any correctness) - used
+ *  to deprioritise recently-seen questions so sessions rotate. */
+async function recentAttemptIds(
+  sb: NonNullable<ReturnType<typeof getSupabase>>,
+  childId: string,
+  days = 3,
+): Promise<Set<string>> {
+  try {
+    const since = new Date(Date.now() - days * 86_400_000).toISOString();
+    const { data } = await sb
+      .from('attempts_log')
+      .select('question_id')
+      .eq('user_id', childId)
+      .gte('created_at', since);
+    return new Set((data ?? []).map((r) => r.question_id as string));
+  } catch {
+    return new Set();
+  }
+}
+
 /** Base session length. Grade 5 runs longer so the full daily journey
  *  (3 subjects + a leadership moment) lands near the ~30-minute goal; grade 3
  *  stays shorter. The bank holds many more for "עוד תרגול". */
@@ -938,6 +958,9 @@ export async function composeFocus(
     if (!subjectTopics.length) return null;
     const kind = SUBJECT_KIND[subject] ?? 'core';
     const solved = childId ? await solvedQuestionIds(sb, childId) : new Set<string>();
+    // Questions seen in the last few days - pushed to the back so the same
+    // unsolved question doesn't lead every single session.
+    const recentlySeen = childId ? await recentAttemptIds(sb, childId, 3) : new Set<string>();
 
     // Leadership worlds are reflective and repeatable - never filter them as "solved".
     const repeatable = subject === LEADERSHIP_SUBJECT;
@@ -995,7 +1018,11 @@ export async function composeFocus(
       }
       if (dedupReview.length) return dedupReview.map(({ topic, q }) => buildStation(kind, subject, topic, q));
     }
-    const ordered = fresh.length >= want ? fresh : [...fresh, ...review];
+    // Within the fresh set, put questions she hasn't seen in the last few days
+    // first (keeping their order), so sessions rotate instead of repeating.
+    const freshOrdered = repeatable ? fresh
+      : [...fresh.filter((f) => !recentlySeen.has(f.q.id)), ...fresh.filter((f) => recentlySeen.has(f.q.id))];
+    const ordered = freshOrdered.length >= want ? freshOrdered : [...freshOrdered, ...review];
     const pool: { topic: TopicRow; q: QRow }[] = [];
     const used = new Set<string>();
     for (const item of ordered) {
