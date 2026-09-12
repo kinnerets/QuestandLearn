@@ -224,7 +224,8 @@ function gradeRules(grade: string): string {
     return `כללים קשיחים לכיתה ה׳ (בני 10-11):
 - מותר שברים, עשרוני, אחוזים ובעיות רב-שלביות ברמת כיתה ה׳.
 - אסור אלגברה של חטיבת ביניים, אסור חזקות/שורשים מתקדמים, אסור מספרים אסטרונומיים.
-- גדלים ריאליים: מחירים וכמויות סבירים (לא מיליונים בבעיה יומיומית).`;
+- גדלים ריאליים: מחירים וכמויות סבירים (לא מיליונים בבעיה יומיומית).
+- רמה של כיתה ה׳, לא של כיתות ב׳-ג׳: הימנע משאלות טריוויאליות (למשל "היקף ריבוע שצלעו 5", חיבור חד-ספרתי). העדף בעיות רב-שלביות, שברים/אחוזים/ממוצע/יחס, ובגאומטריה שטח, זוויות ונפח - לא רק היקף בסיסי.`;
   }
   return `כללים למקצועות העשרה (בני 8-11):
 - הסבר כל מושג בשפה פשוטה ומוחשית של ילדה, עם דוגמה מהעולם שלה (בית ספר, חברים, משחקים, משפחה).
@@ -587,6 +588,51 @@ export async function purgeStaleFlagged(days = 7): Promise<number> {
       .lt('created_at', cutoff)
       .select('id');
     return (data ?? []).length;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Nightly self-heal: remove duplicate questions that share the same wording
+ * within a subject (across all its topics/grades), so the same question can't
+ * show for both children or come back again. Keeps one copy, and never deletes a
+ * question that already has attempts. Samples a few subjects per run.
+ */
+export async function purgeDuplicateQuestions(maxSubjects = 4): Promise<number> {
+  const sb = getSupabase();
+  if (!sb) return 0;
+  let removed = 0;
+  try {
+    const { data: topics } = await sb.from('curriculum_topics').select('id,subject');
+    if (!topics?.length) return 0;
+    const bySubject = new Map<string, string[]>();
+    for (const t of topics) {
+      const arr = bySubject.get(t.subject as string) ?? [];
+      arr.push(t.id as string);
+      bySubject.set(t.subject as string, arr);
+    }
+    const subjects = [...bySubject.keys()].sort(() => Math.random() - 0.5).slice(0, maxSubjects);
+    for (const subj of subjects) {
+      const { data: qs } = await sb.from('questions_bank').select('id,payload').in('topic_id', bySubject.get(subj)!);
+      if (!qs?.length) continue;
+      const seen = new Set<string>();
+      const dupIds: string[] = [];
+      for (const q of qs) {
+        const stem = norm(String((q.payload as Record<string, unknown>)?.stem ?? ''));
+        if (!stem) continue;
+        if (seen.has(stem)) dupIds.push(q.id as string); else seen.add(stem);
+      }
+      if (!dupIds.length) continue;
+      const { data: att } = await sb.from('attempts_log').select('question_id').in('question_id', dupIds);
+      const attempted = new Set((att ?? []).map((r) => r.question_id as string));
+      const toDelete = dupIds.filter((id) => !attempted.has(id));
+      if (toDelete.length) {
+        const { data: del } = await sb.from('questions_bank').delete().in('id', toDelete).select('id');
+        removed += (del ?? []).length;
+      }
+    }
+    return removed;
   } catch {
     return 0;
   }

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { ensureGlobalBuffer, thinTopicCount, revalidateExisting, purgeStaleFlagged } from '@/lib/generator';
+import { ensureGlobalBuffer, thinTopicCount, revalidateExisting, purgeStaleFlagged, purgeDuplicateQuestions } from '@/lib/generator';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300; // several sequential generations per invocation
@@ -27,6 +27,8 @@ export async function GET(req: Request) {
   const revalidated = await revalidateExisting(4);
   // Auto-clear the parent's review pile: drop questions left flagged over a week.
   const purged = await purgeStaleFlagged(7);
+  // Self-heal duplicate questions across subjects (same wording shown to both kids).
+  const deduped = await purgeDuplicateQuestions(4);
   const remaining = await thinTopicCount();
 
   // Self-chain: if we made progress and topics still need filling, kick the next
@@ -44,5 +46,5 @@ export async function GET(req: Request) {
     } catch { /* best-effort chaining */ }
   }
 
-  return NextResponse.json({ ok: true, ...result, remaining, revalidated, purged });
+  return NextResponse.json({ ok: true, ...result, remaining, revalidated, purged, deduped });
 }
