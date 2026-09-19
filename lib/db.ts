@@ -839,17 +839,21 @@ export async function getDailyLesson(grade = 'grade_3', childId?: string, round 
       if (!candidates.length) return;
       // Pick the highest-priority topic for THIS child (weak/overdue/misconception/
       // interest first), softly gated so an un-mastered prerequisite pushes an
-      // advanced sub-topic down without hard-locking it.
+      // advanced sub-topic down without hard-locking it. A topic whose questions
+      // the child has ALL already solved is pushed far down, so the daily journey
+      // serves fresh questions instead of recycling ones she got right.
       const topic = candidates
         .map((t) => ({
           t,
           score: topicPriority(sigs.get(t.id), jitterFor(t.id), boostOf(t.subject))
             - prereqPenalty(t, sigs, topicsBySubject)
-            + (focusTopics.has(t.id) ? 0.7 : 0), // parent reinforced this exact sub-topic
+            + (focusTopics.has(t.id) ? 0.7 : 0) // parent reinforced this exact sub-topic
+            + ((qByTopic.get(t.id) ?? []).some((x) => !solved.has(x.id)) ? 0.5 : -1), // fresh content wins
         }))
         .sort((a, b) => b.score - a.score)[0].t;
       const qs = qByTopic.get(topic.id)!;
-      // Prefer a question the child hasn't solved yet; else rotate by day.
+      // Prefer a question she hasn't solved yet; only if the whole pool is
+      // exhausted fall back to a day-rotated one (rare - triggers a refill anyway).
       const q = qs.find((x) => !solved.has(x.id)) ?? qs[(seed + round - 1) % qs.length];
       stations.push(buildStation(slot.kind, topic.subject, topic, q));
     });
@@ -2404,21 +2408,71 @@ export async function setSubjectLock(subject: string, locked: boolean): Promise<
 // ─────────────── Seasonal content (holiday / season by the calendar) ───────────────
 interface Season { key: string; topicId: string; from: [number, number]; to: [number, number]; label: string; emoji: string }
 
-// Approximate Gregorian windows (Hebrew holidays drift year to year; good enough
-// for surfacing a seasonal highlight). Each maps to a seeded seasonal topic.
+// Each holiday/season maps to a seeded seasonal topic. `from`/`to` are approximate
+// Gregorian windows used ONLY as a fallback; the real selection below reads the
+// actual Hebrew calendar so the right holiday shows on the right day every year.
 const SEASONS: Season[] = [
-  { key: 'rosh',    topicId: 'b0000001-0000-4000-8000-000000000001', from: [8, 25],  to: [9, 20],  label: 'ראש השנה', emoji: '🍎' },
-  { key: 'sukkot',  topicId: 'b0000001-0000-4000-8000-000000000002', from: [9, 21],  to: [10, 12], label: 'סוכות',    emoji: '🌿' },
-  { key: 'hanukkah',topicId: 'b0000001-0000-4000-8000-000000000003', from: [12, 8],  to: [12, 31], label: 'חנוכה',    emoji: '🕎' },
-  { key: 'tubshvat',topicId: 'b0000001-0000-4000-8000-000000000004', from: [1, 18],  to: [2, 12],  label: 'ט״ו בשבט', emoji: '🌳' },
-  { key: 'purim',   topicId: 'b0000001-0000-4000-8000-000000000005', from: [2, 25],  to: [3, 22],  label: 'פורים',    emoji: '🎭' },
-  { key: 'pesach',  topicId: 'b0000001-0000-4000-8000-000000000006', from: [3, 25],  to: [4, 20],  label: 'פסח',      emoji: '🍷' },
-  { key: 'indep',   topicId: 'b0000001-0000-4000-8000-000000000007', from: [4, 21],  to: [5, 12],  label: 'יום העצמאות', emoji: '🇮🇱' },
-  { key: 'shavuot', topicId: 'b0000001-0000-4000-8000-000000000008', from: [5, 15],  to: [6, 8],   label: 'שבועות',   emoji: '🌾' },
-  { key: 'summer',  topicId: 'b0000001-0000-4000-8000-000000000009', from: [6, 20],  to: [8, 24],  label: 'קיץ',      emoji: '☀️' },
+  { key: 'rosh',      topicId: 'b0000001-0000-4000-8000-000000000001', from: [9, 4],   to: [9, 15],  label: 'ראש השנה',  emoji: '🍎' },
+  { key: 'yomkippur', topicId: 'b0000001-0000-4000-8000-000000000010', from: [9, 16],  to: [9, 23],  label: 'יום כיפור', emoji: '🕊️' },
+  { key: 'sukkot',    topicId: 'b0000001-0000-4000-8000-000000000002', from: [9, 24],  to: [10, 14], label: 'סוכות',     emoji: '🌿' },
+  { key: 'hanukkah',  topicId: 'b0000001-0000-4000-8000-000000000003', from: [12, 8],  to: [12, 31], label: 'חנוכה',     emoji: '🕎' },
+  { key: 'tubshvat',  topicId: 'b0000001-0000-4000-8000-000000000004', from: [1, 18],  to: [2, 12],  label: 'ט״ו בשבט',  emoji: '🌳' },
+  { key: 'purim',     topicId: 'b0000001-0000-4000-8000-000000000005', from: [2, 25],  to: [3, 22],  label: 'פורים',     emoji: '🎭' },
+  { key: 'pesach',    topicId: 'b0000001-0000-4000-8000-000000000006', from: [3, 25],  to: [4, 20],  label: 'פסח',       emoji: '🍷' },
+  { key: 'indep',     topicId: 'b0000001-0000-4000-8000-000000000007', from: [4, 21],  to: [5, 12],  label: 'יום העצמאות', emoji: '🇮🇱' },
+  { key: 'shavuot',   topicId: 'b0000001-0000-4000-8000-000000000008', from: [5, 15],  to: [6, 8],   label: 'שבועות',    emoji: '🌾' },
+  { key: 'summer',    topicId: 'b0000001-0000-4000-8000-000000000009', from: [6, 20],  to: [8, 24],  label: 'קיץ',       emoji: '☀️' },
 ];
+const SEASON_BY_KEY: Record<string, Season> = Object.fromEntries(SEASONS.map((s) => [s.key, s]));
+
+// Today's Hebrew month name + day, in Israel time (so a holiday flips on the
+// correct local date). Uses the platform Hebrew calendar - no external library.
+function hebrewToday(now: Date): { month: string; day: number } | null {
+  try {
+    const parts = new Intl.DateTimeFormat('en-u-ca-hebrew', {
+      timeZone: 'Asia/Jerusalem', month: 'long', day: 'numeric',
+    }).formatToParts(now);
+    const month = (parts.find((p) => p.type === 'month')?.value ?? '').toLowerCase();
+    const day = Number(parts.find((p) => p.type === 'day')?.value ?? '');
+    if (!month || !Number.isFinite(day)) return null;
+    return { month, day };
+  } catch {
+    return null;
+  }
+}
+
+// Map a Hebrew date to the active season key. Windows are a few days wide so the
+// highlight leads up to and covers each holiday.
+function seasonKeyFromHebrew(month: string, day: number): string | null {
+  const is = (name: string) => month.startsWith(name);
+  if (is('tishri')) {
+    if (day <= 2) return 'rosh';           // 1-2 Tishri: Rosh Hashana
+    if (day <= 10) return 'yomkippur';     // 3-10 Tishri: leading to / on Yom Kippur (10th)
+    if (day <= 23) return 'sukkot';        // 15-21 Sukkot, +Simchat Torah, +lead-in
+    return null;
+  }
+  if (is('kislev')) return day >= 24 ? 'hanukkah' : null; // 25 Kislev onward
+  if (is('tevet')) return day <= 3 ? 'hanukkah' : null;   // Hanukkah tail
+  if (is('shevat')) return (day >= 10 && day <= 16) ? 'tubshvat' : null; // 15 Shevat
+  if (is('adar')) {
+    if (month === 'adar i') return null;   // leap-year first Adar has no real Purim
+    return (day >= 11 && day <= 16) ? 'purim' : null;      // 14 Adar (Adar II in leap years)
+  }
+  if (is('nisan')) return (day >= 14 && day <= 22) ? 'pesach' : null;    // 15-21 Nisan
+  if (is('iyar')) return (day >= 3 && day <= 7) ? 'indep' : null;        // ~5 Iyar
+  if (is('sivan')) return (day >= 5 && day <= 8) ? 'shavuot' : null;     // 6 Sivan
+  if (is('tamuz') || is('tammuz') || is('av') || is('elul')) return 'summer';
+  return null;
+}
 
 function activeSeason(now = new Date()): Season | null {
+  // Primary: the real Hebrew calendar (accurate every year).
+  const hd = hebrewToday(now);
+  if (hd) {
+    const key = seasonKeyFromHebrew(hd.month, hd.day);
+    return key ? (SEASON_BY_KEY[key] ?? null) : null;
+  }
+  // Fallback (only if the platform lacks the Hebrew calendar): approximate windows.
   const md = (now.getMonth() + 1) * 100 + now.getDate();
   for (const s of SEASONS) {
     const lo = s.from[0] * 100 + s.from[1];
