@@ -7,7 +7,7 @@ on conflict (id) do update set sub_topic = excluded.sub_topic;
 
 -- Only seed the questions if they aren't already there, so re-running won't duplicate.
 insert into questions_bank (topic_id, type, difficulty, source, verification_status, payload)
-select v.topic_id, v.type, v.difficulty, v.source, v.status, v.payload
+select v.topic_id::uuid, v.type, v.difficulty, v.source, v.status, v.payload
 from (values
   ('b0000001-0000-4000-8000-000000000010','multiple_choice',1,'curated','auto_passed',
    '{"tag":"יום כיפור","stem":"יום כיפור הוא יום שבו נהוג לבקש מהאנשים סביבנו…","hints":["כשעושים משהו לא נעים לחבר","מילה קטנה שמשלימה בין אנשים"],"explanation":"ביום כיפור נהוג לבקש סליחה ולהשלים עם אנשים.","choices":[{"id":"a","text":"סליחה"},{"id":"b","text":"כסף"},{"id":"c","text":"מתנות"},{"id":"d","text":"שיעורי בית"}],"correct_choice_id":"a","coins":10}'::jsonb),
