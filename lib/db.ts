@@ -2449,7 +2449,13 @@ const SEASONS: Season[] = [
   { key: 'pesach',    topicId: 'b0000001-0000-4000-8000-000000000006', from: [3, 25],  to: [4, 20],  label: 'פסח',       emoji: '🍷' },
   { key: 'indep',     topicId: 'b0000001-0000-4000-8000-000000000007', from: [4, 21],  to: [5, 12],  label: 'יום העצמאות', emoji: '🇮🇱' },
   { key: 'shavuot',   topicId: 'b0000001-0000-4000-8000-000000000008', from: [5, 15],  to: [6, 8],   label: 'שבועות',    emoji: '🌾' },
+  { key: 'tubav',     topicId: 'b0000001-0000-4000-8000-000000000011', from: [8, 10],  to: [8, 20],  label: 'ט״ו באב',   emoji: '💗' },
   { key: 'summer',    topicId: 'b0000001-0000-4000-8000-000000000009', from: [6, 20],  to: [8, 24],  label: 'קיץ',       emoji: '☀️' },
+  // Civil / international days that Israeli kids are exposed to (not Jewish holidays).
+  { key: 'spaceweek', topicId: 'b0000001-0000-4000-8000-000000000014', from: [10, 4],  to: [10, 10], label: 'שבוע החלל', emoji: '🚀' },
+  { key: 'health',    topicId: 'b0000001-0000-4000-8000-000000000015', from: [10, 13], to: [10, 16], label: 'אני והגוף שלי', emoji: '💪' },
+  { key: 'halloween', topicId: 'b0000001-0000-4000-8000-000000000012', from: [10, 25], to: [10, 31], label: 'האלווין',   emoji: '🎃' },
+  { key: 'sylvester', topicId: 'b0000001-0000-4000-8000-000000000013', from: [12, 31], to: [1, 1],   label: 'סילבסטר',   emoji: '🎉' },
 ];
 const SEASON_BY_KEY: Record<string, Season> = Object.fromEntries(SEASONS.map((s) => [s.key, s]));
 
@@ -2467,6 +2473,19 @@ function hebrewToday(now: Date): { month: string; day: number } | null {
   } catch {
     return null;
   }
+}
+
+// Today's Gregorian month/day in Israel time (for civil/international days).
+function israelMonthDay(now: Date): { m: number; d: number } {
+  try {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Jerusalem', month: '2-digit', day: '2-digit',
+    }).formatToParts(now);
+    const m = Number(parts.find((p) => p.type === 'month')?.value);
+    const d = Number(parts.find((p) => p.type === 'day')?.value);
+    if (m && d) return { m, d };
+  } catch { /* fall through */ }
+  return { m: now.getMonth() + 1, d: now.getDate() };
 }
 
 // Map a Hebrew date to the active season key. Windows are a few days wide so the
@@ -2489,7 +2508,20 @@ function seasonKeyFromHebrew(month: string, day: number): string | null {
   if (is('nisan')) return (day >= 14 && day <= 22) ? 'pesach' : null;    // 15-21 Nisan
   if (is('iyar')) return (day >= 3 && day <= 7) ? 'indep' : null;        // ~5 Iyar
   if (is('sivan')) return (day >= 5 && day <= 8) ? 'shavuot' : null;     // 6 Sivan
-  if (is('tamuz') || is('tammuz') || is('av') || is('elul')) return 'summer';
+  if (is('av')) return (day >= 13 && day <= 16) ? 'tubav' : 'summer';    // 15 Av
+  if (is('tamuz') || is('tammuz') || is('elul')) return 'summer';
+  return null;
+}
+
+// Gregorian-fixed civil/international days celebrated or noticed in Israel. These
+// only fill gaps - a Jewish holiday always takes precedence (see activeSeason).
+function civilSeasonKey(now: Date): string | null {
+  const { m, d } = israelMonthDay(now);
+  const v = m * 100 + d;
+  if (v === 1231 || v === 101) return 'sylvester';        // New Year's Eve (Sylvester)
+  if (v >= 1025 && v <= 1031) return 'halloween';         // last week of October
+  if (v >= 1004 && v <= 1010) return 'spaceweek';         // World Space Week
+  if (v >= 1013 && v <= 1016) return 'health';            // a "me and my body" health day
   return null;
 }
 
@@ -2498,9 +2530,17 @@ function activeSeason(now = new Date()): Season | null {
   const hd = hebrewToday(now);
   if (hd) {
     const key = seasonKeyFromHebrew(hd.month, hd.day);
-    return key ? (SEASON_BY_KEY[key] ?? null) : null;
+    // A dated Jewish holiday wins. Only when there's no holiday (or it's the
+    // generic 'summer' filler) do civil/international days get a turn.
+    if (key && key !== 'summer') return SEASON_BY_KEY[key] ?? null;
+    const civil = civilSeasonKey(now);
+    if (civil) return SEASON_BY_KEY[civil] ?? null;
+    return key ? (SEASON_BY_KEY[key] ?? null) : null; // 'summer' or nothing
   }
-  // Fallback (only if the platform lacks the Hebrew calendar): approximate windows.
+  // Fallback (only if the platform lacks the Hebrew calendar): civil days, then
+  // approximate Gregorian windows.
+  const civil = civilSeasonKey(now);
+  if (civil) return SEASON_BY_KEY[civil] ?? null;
   const md = (now.getMonth() + 1) * 100 + now.getDate();
   for (const s of SEASONS) {
     const lo = s.from[0] * 100 + s.from[1];
