@@ -1,10 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { CoinIcon, CheckIcon, CloseIcon } from '@/components/icons';
 import type { Redemption } from '@/lib/db';
 
 export function RedemptionsPanel({ childName }: { childName?: string }) {
+  const router = useRouter();
   const [items, setItems] = useState<Redemption[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -27,6 +29,8 @@ export function RedemptionsPanel({ childName }: { childName?: string }) {
         method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ id, action }),
       });
+      // A refund returns coins - refresh so balances aren't served stale.
+      router.refresh();
     } catch { /* ignore */ }
     setBusy(null);
   }

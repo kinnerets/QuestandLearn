@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { CoinIcon, CheckIcon, CloseIcon } from '@/components/icons';
 
 interface Approval {
@@ -8,6 +9,7 @@ interface Approval {
 }
 
 export function TaskApprovalsPanel({ childId, childName }: { childId?: string; childName?: string }) {
+  const router = useRouter();
   const [items, setItems] = useState<Approval[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -30,6 +32,9 @@ export function TaskApprovalsPanel({ childId, childName }: { childId?: string; c
         method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ id, action }),
       });
+      // Approving grants coins - refresh so the child's balance updates here and
+      // isn't served stale from the router cache when the parent returns home.
+      router.refresh();
     } catch { /* ignore */ }
     setBusy(null);
   }
