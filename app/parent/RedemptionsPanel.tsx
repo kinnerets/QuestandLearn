@@ -36,14 +36,18 @@ export function RedemptionsPanel({ childName }: { childName?: string }) {
   }
 
   const shownItems = childName ? items.filter((r) => r.childName === childName) : items;
-  if (!loaded || shownItems.length === 0) return null;
+  if (!loaded) return null;
 
   return (
     <section className="content-panel">
       <div className="parent-head" style={{ marginBottom: 8 }}>
-        <h2 style={{ fontSize: '1.15rem' }}>בקשות פרס{childName ? ` · ${childName}` : ''} <span className="flag-count">{shownItems.length}</span></h2>
+        <h2 style={{ fontSize: '1.15rem' }}>בקשות פרס{childName ? ` · ${childName}` : ''} {shownItems.length > 0 && <span className="flag-count">{shownItems.length}</span>}</h2>
       </div>
-      <p className="content-hint">מימוש מטבעות על פרסים. "בוצע" מסמן שנתת את הפרס; "ביטול" מחזיר את המטבעות.</p>
+      <p className="content-hint">מימוש מטבעות על פרסים מהחנות. "בוצע" מסמן שנתת את הפרס; "ביטול" מחזיר את המטבעות.</p>
+
+      {shownItems.length === 0 && (
+        <div className="report-empty">אין בקשות פרס ממתינות. כשהבנות ימשו פרס מהחנות, הבקשה תופיע כאן לאישור.</div>
+      )}
 
       {shownItems.map((r) => (
         <div key={r.id} className="redeem-card">

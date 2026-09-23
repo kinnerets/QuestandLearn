@@ -48,6 +48,10 @@ export async function askCapi(
 - אם מבקשים חידה: תן חידת ניחוש קצרה וקלה מאוד על חיה, חפץ יומיומי או פרי מוכרים, עם רמז אחד או שניים ברורים וחד-משמעיים שילדה בגיל ${gradeLabel} תפתור בקלות. דוגמה לרמה הנכונה: "אני צהובה וארוכה, מקלפים אותי וקופים אוהבים אותי. מה אני?" (בננה).
 - הימנע לגמרי מחידות מופשטות, ממשחקי מילים דו-משמעיים ("יש לי פנים אבל…") ומחידות היגיון מבוגרות. אם יש ספק - תן חידה קלה יותר.
 - אחרי החידה הצע רמז ("רוצה רמז?"), ואם היא לא יודעת גלה בעדינות את התשובה עם הסבר קצר.
+בדיחות (אם מבקשים בדיחה):
+- ספר בדיחה קלאסית, נקייה וקצרה לילדים, שבאמת מצחיקה ויש לה מבנה של שאלה ותשובה עם פאנץ' ברור. אל תמציא בדיחה מבולבלת או כזו שאין בה קטע מצחיק אמיתי.
+- דוגמאות לרמה ולסגנון הנכונים: "למה העגבנייה הסמיקה? כי היא ראתה את הרוטב מתפשט!"; "מה אמר הים לחוף? כלום, הוא רק נופף בגלים!"; "איזה חודש הכי קצר? מאי - יש בו רק שלוש אותיות!".
+- בדיחה אחת בכל פעם, בעברית תקנית לגמרי, ואז אפשר לשאול "רוצה עוד אחת?".
 נושאים שמבקשים הרבה - הסבר בפשטות עם טריק לזכירה:
 - ימין ושמאל: קשרי ליד הכותבת/לסימן מוכר ("היד שאיתה את כותבת היא ימין"), ותני טריק פשוט לזכור.
 - קריאת שעון: המחוג הקצר מראה את השעה, המחוג הארוך את הדקות; הסבירי בצעדים קטנים ובדוגמה.
@@ -70,11 +74,12 @@ export async function askCapi(
   try {
     const anthropic = new Anthropic({ apiKey, timeout: 20_000, maxRetries: 1 });
     let text = '';
-    // Up to two tries: if the model glues Latin letters into a Hebrew word
-    // (garbled output, e.g. "ההything"), regenerate once with a stricter note.
+    // Up to two tries: if the model produces garbled output (Latin glued to
+    // Hebrew, stray marks, or characters from other scripts), regenerate once
+    // with a stricter note. If it's still broken, don't show gibberish to a child.
     for (let attempt = 0; attempt < 2; attempt++) {
       const sys = attempt === 0 ? system
-        : `${system}\nחשוב מאוד: הפלט הקודם היה משובש. כתוב עכשיו אך ורק בעברית תקנית וברורה, בלי שום אות לטינית.`;
+        : `${system}\nחשוב מאוד: הפלט הקודם היה משובש. כתוב עכשיו אך ורק בעברית תקנית וברורה, בלי שום אות לטינית, בלי ניקוד או טעמים, ובלי סימנים מוזרים.`;
       const resp = await anthropic.messages.create({ model: MODEL, max_tokens: 320, system: sys, messages: msgs });
       // A safety classifier may decline - treat that as a gentle deflection.
       if (resp.stop_reason === 'refusal') {
@@ -82,15 +87,24 @@ export async function askCapi(
       }
       text = resp.content.filter((b) => b.type === 'text').map((b) => (b as { text: string }).text).join(' ').trim();
       if (!isGarbled(text)) break;
+      text = ''; // discard garbled output so we never return it
     }
-    return { ok: true, reply: text || fallback };
+    return { ok: true, reply: text || 'רגע, קפי קצת התבלבל. אפשר לנסות לשאול שוב?' };
   } catch {
     return { ok: false, reply: fallback };
   }
 }
 
-/** Detects garbled output where Latin letters are glued to Hebrew inside a word
- *  (a known small-model glitch). Legit spaced English words are not flagged. */
+/** Detects garbled output that should never reach a child: Latin letters glued to
+ *  Hebrew inside a word, Hebrew cantillation/te'amim, combining diacritics, or
+ *  letters from unrelated scripts (Devanagari, Cyrillic, Arabic, CJK) - all known
+ *  small-model glitches. Plain spaced English words are not flagged. */
 function isGarbled(text: string): boolean {
-  return /[A-Za-z][֐-׿]|[֐-׿][A-Za-z]/.test(text);
+  if (!text) return false;
+  // Latin letter directly touching a Hebrew letter (e.g. "ההything").
+  if (/[A-Za-z][֐-׿]|[֐-׿][A-Za-z]/.test(text)) return true;
+  // Hebrew cantillation marks, combining diacritics, or other-script letters -
+  // none of these belong in a plain Hebrew chat reply.
+  if (/[֑-֯̀-ͯЀ-ӿ؀-ۿऀ-ॿ぀-ヿ㐀-鿿]/.test(text)) return true;
+  return false;
 }

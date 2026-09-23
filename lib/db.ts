@@ -1239,9 +1239,34 @@ export async function getSubjectBreakdown(grade: string, childId: string): Promi
   }
 }
 
-/** Recent wrong-answered question stems per topic (last `days` days) - so a
- *  parent sees concrete examples of what to reinforce. Map: topicId → stems. */
-export async function getRecentWrongByTopic(childId: string, days = 7): Promise<Record<string, string[]>> {
+/** One missed question shown to the parent: the wording, the answer options, and
+ *  which one was correct - so the report explains what was actually missed. */
+export interface WrongExample { stem: string; correct: string; options: string[] }
+
+/** Build a WrongExample from a question payload (handles every question type). */
+function toWrongExample(type: string, p: Record<string, unknown>, stem: string): WrongExample {
+  const choices = Array.isArray(p.choices) ? (p.choices as { id: string; text: string }[]) : [];
+  const options = choices.map((c) => String(c.text ?? '')).filter(Boolean);
+  if (type === 'true_false') {
+    const yes = p.answer === true || p.answer === 'true' || p.correct_choice_id === 't';
+    return { stem, correct: yes ? 'נכון' : 'לא נכון', options: ['נכון', 'לא נכון'] };
+  }
+  if (type === 'type_in') {
+    const answers = Array.isArray(p.answers) ? (p.answers as unknown[]).map((a) => String(a)) : [];
+    return { stem, correct: answers[0] ?? '', options: [] };
+  }
+  if (type === 'multi_select') {
+    const ids = Array.isArray(p.correct_choice_ids) ? (p.correct_choice_ids as string[]) : [];
+    return { stem, correct: choices.filter((c) => ids.includes(c.id)).map((c) => c.text).join(', '), options };
+  }
+  return { stem, correct: choices.find((c) => c.id === p.correct_choice_id)?.text ?? '', options };
+}
+
+/** Recently wrong-answered questions per topic, with options + the correct answer,
+ *  so a parent sees exactly what was missed. A generous window (default ~45 days)
+ *  so a subject below 100% still shows concrete examples, not just a bare score.
+ *  Map: topicId -> examples. */
+export async function getRecentWrongByTopic(childId: string, days = 45): Promise<Record<string, WrongExample[]>> {
   const sb = getSupabase();
   if (!sb) return {};
   try {
@@ -1250,21 +1275,24 @@ export async function getRecentWrongByTopic(childId: string, days = 7): Promise<
       .from('attempts_log')
       .select('topic_id,question_id,created_at')
       .eq('user_id', childId).eq('is_correct', false).gte('created_at', since)
-      .order('created_at', { ascending: false }).limit(200);
+      .order('created_at', { ascending: false }).limit(300);
     if (!rows?.length) return {};
-    const qids = [...new Set(rows.map((r) => r.question_id as string))].slice(0, 100);
-    const { data: qs } = await sb.from('questions_bank').select('id,topic_id,payload').in('id', qids);
-    const out: Record<string, string[]> = {};
+    // question_id can be null for attempts whose question was later deleted - skip those.
+    const qids = [...new Set(rows.map((r) => r.question_id as string).filter(Boolean))].slice(0, 120);
+    if (!qids.length) return {};
+    const { data: qs } = await sb.from('questions_bank').select('id,topic_id,type,payload').in('id', qids);
+    const out: Record<string, WrongExample[]> = {};
     const seen = new Set<string>();
     for (const q of qs ?? []) {
       const topicId = q.topic_id as string;
-      const stem = String((q.payload as { stem?: string })?.stem ?? '').trim();
+      const p = (q.payload ?? {}) as Record<string, unknown>;
+      const stem = String(p.stem ?? '').trim();
       if (!stem) continue;
       const key = topicId + '|' + stem;
       if (seen.has(key)) continue;
       seen.add(key);
       (out[topicId] ??= []);
-      if (out[topicId].length < 3) out[topicId].push(stem); // a few examples per topic
+      if (out[topicId].length < 5) out[topicId].push(toWrongExample(String(q.type ?? 'multiple_choice'), p, stem)); // a few per topic
     }
     return out;
   } catch {

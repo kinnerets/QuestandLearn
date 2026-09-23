@@ -7,12 +7,13 @@ import { Section } from './Section';
 
 interface SubStat { id: string; subTopic: string; accuracy: number; answered: number; solved: number; total: number }
 interface Subj { subject: string; label: string; kind: string; accuracy: number; answered: number; sub: SubStat[] }
+interface WrongEx { stem: string; correct: string; options: string[] }
 
 export function SubtopicFocusPanel({ childId, childName }: { childId?: string; childName?: string }) {
   const [data, setData] = useState<Subj[]>([]);
   const [focus, setFocus] = useState<Set<string>>(new Set());
   const [subjFocus, setSubjFocus] = useState<Set<string>>(new Set());
-  const [wrong, setWrong] = useState<Record<string, string[]>>({});
+  const [wrong, setWrong] = useState<Record<string, WrongEx[]>>({});
   const [open, setOpen] = useState<Set<string>>(new Set()); // sub-topics collapsed until tapped
   const [loaded, setLoaded] = useState(false);
 
@@ -98,8 +99,33 @@ export function SubtopicFocusPanel({ childId, childName }: { childId?: string; c
                         </div>
                         {misses.length > 0 && (
                           <div className="pfocus-wrong">
-                            <span className="pfocus-wrong-tag">טעויות מהשבוע</span>
-                            {misses.map((m, i) => <div key={i} className="pfocus-wrong-q">{m}</div>)}
+                            <span className="pfocus-wrong-tag">שאלות שטעתה בהן</span>
+                            {misses.map((m, i) => (
+                              <div key={i} className="pfocus-wrong-q" style={{ marginBottom: 8 }}>
+                                <div style={{ fontWeight: 600 }}>{m.stem}</div>
+                                {m.options.length > 0 && (
+                                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+                                    {m.options.map((o, j) => {
+                                      const ok = o === m.correct;
+                                      return (
+                                        <span key={j} style={{
+                                          fontSize: '0.82rem', padding: '2px 8px', borderRadius: 8,
+                                          border: `1px solid ${ok ? '#2FBF8F' : 'var(--line)'}`,
+                                          background: ok ? 'rgba(47,191,143,0.15)' : 'transparent',
+                                          color: ok ? '#1f8f6a' : 'var(--muted)',
+                                          fontWeight: ok ? 700 : 400,
+                                        }}>{ok ? '✓ ' : ''}{o}</span>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                                {m.correct && m.options.length === 0 && (
+                                  <div style={{ marginTop: 4, fontSize: '0.85rem', color: '#1f8f6a', fontWeight: 700 }}>
+                                    תשובה נכונה: {m.correct}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
                           </div>
                         )}
                       </div>
