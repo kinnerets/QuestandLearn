@@ -1609,11 +1609,11 @@ export async function completeQuest(coinsEarned: number, childId?: string, xpEar
 
     const alreadyAwarded = row?.coins_awarded_today ?? 0;
     const firstToday = !row?.quest_completed;
-    // Diminishing returns: each extra round the same day is worth progressively
-    // less (down to 30%), then the daily cap stops earning entirely.
-    const factor = Math.max(0.3, 1 - alreadyAwarded / DAILY_COIN_CAP);
-    const decayed = Math.round(coinsEarned * factor);
-    const grant = Math.max(0, Math.min(decayed, DAILY_COIN_CAP - alreadyAwarded));
+    // Grant the FULL coins earned this round. What the child sees add up during
+    // play is exactly what she keeps - no silent daily cap / diminishing-returns
+    // that made coins appear to "vanish" when the next screen loaded the real,
+    // lower balance. (Rewards are parent-approved, so there's no farming risk.)
+    const grant = Math.max(0, Math.round(coinsEarned));
 
     // Real consecutive-day streak: on the first completion today, continue the
     // streak only if she also completed one YESTERDAY; otherwise it restarts at 1.

@@ -72,9 +72,23 @@ function normalizeAnswer(s: string): string {
 }
 function typedMatches(typed: string, answers?: string[]): boolean {
   if (!answers?.length) return false;
-  const g = normalizeAnswer(typed);
-  if (!g) return false;
-  return answers.some((a) => normalizeAnswer(a) === g);
+  const tv = answerVariants(typed);
+  if (!tv.length) return false;
+  return answers.some((a) => answerVariants(a).some((x) => tv.includes(x)));
+}
+
+/** Accept reasonable variants of a name: with/without the definite article "ה"
+ *  and a leading geographic word (ים/אגם/הר/עיר/נהר). So for a stored answer
+ *  "הכנרת", the child's "כנרת" or "ים כנרת" are graded correct too. */
+function answerVariants(s: string): string[] {
+  const n = normalizeAnswer(s);
+  if (!n) return [];
+  const out = new Set<string>([n]);
+  const noGeo = n.replace(/^(ימ|אגמ|הר|עיר|נהר)\s+/, ''); // final-mem already folded by normalizeAnswer
+  out.add(noGeo);
+  out.add(noGeo.replace(/^ה/, ''));
+  out.add(n.replace(/^ה/, ''));
+  return [...out].filter(Boolean);
 }
 
 /** A short celebratory buzz on a correct answer (no-op where unsupported, e.g.
