@@ -443,6 +443,25 @@ export async function getChildProfile(): Promise<ChildProfile | null> {
   return all?.[0] ?? null;
 }
 
+/** Parent: manually adjust a child's coin balance (grant or deduct). Never goes
+ *  below zero. Returns the new balance, or null on failure. Used by the parent
+ *  area's coin-adjust control so corrections need no database access. */
+export async function adjustChildCoins(childId: string, delta: number): Promise<number | null> {
+  const sb = getSupabase();
+  if (!sb) return null;
+  try {
+    const child = await getChildProfileById(childId);
+    if (!child) return null;
+    const next = Math.max(0, child.coins + Math.round(delta));
+    const { error } = await sb.from('users').update({ quest_coins: next }).eq('id', childId);
+    if (error) return null;
+    _childrenCache = null; // balance changed - don't serve a stale one
+    return next;
+  } catch {
+    return null;
+  }
+}
+
 export interface SubjectMastery {
   subject: string;
   subTopic: string;
