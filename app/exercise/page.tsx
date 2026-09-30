@@ -60,17 +60,20 @@ function backLabel(backHref: string): string {
   return backHref === '/map' ? 'חזרה לנושאים' : backHref === '/status' ? 'חזרה למצב שלי' : 'חזרה למסע';
 }
 
-/** Loose comparison for typed answers: trim, lowercase, drop nikud, punctuation,
- *  final-letter forms, invisible marks and inner spaces so "42 " / "ארבעים ושתיים" grade fairly. */
+/** Loose comparison for typed answers: lowercase, drop nikud, final-letter forms,
+ *  and ALL punctuation / marks / invisible characters, collapsing to bare words +
+ *  numbers, so "42 ", "goes." with a stray direction mark, or "ארבעים ושתיים" all
+ *  grade fairly. Keeping only letters/numbers/spaces is the robust guard against
+ *  invisible characters the generator sometimes wraps around answers. */
 function normalizeAnswer(s: string): string {
   return s
-    .replace(/[​-‏‪-‮⁦-⁩﻿]/g, '') // invisible/direction marks
     .replace(/ /g, ' ')                 // non-breaking space -> space
-    .trim().toLowerCase()
+    .toLowerCase()
     .replace(/[֑-ׇ]/g, '')       // Hebrew nikud/te'amim
-    .replace(/[.,!?;:"'`״׳]/g, '')          // punctuation & Hebrew gershayim
     .replace(/ך/g, 'כ').replace(/ם/g, 'מ').replace(/ן/g, 'נ').replace(/ף/g, 'פ').replace(/ץ/g, 'צ')
-    .replace(/\s+/g, ' ');
+    .replace(/[^\p{L}\p{N} ]+/gu, ' ')       // drop punctuation, symbols, invisible/direction marks
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 function typedMatches(typed: string, answers?: string[]): boolean {
   if (!answers?.length) return false;
