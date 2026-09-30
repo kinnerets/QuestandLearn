@@ -61,9 +61,11 @@ function backLabel(backHref: string): string {
 }
 
 /** Loose comparison for typed answers: trim, lowercase, drop nikud, punctuation,
- *  final-letter forms and inner spaces so "42 " / "ארבעים ושתיים" grade fairly. */
+ *  final-letter forms, invisible marks and inner spaces so "42 " / "ארבעים ושתיים" grade fairly. */
 function normalizeAnswer(s: string): string {
   return s
+    .replace(/[​-‏‪-‮⁦-⁩﻿]/g, '') // invisible/direction marks
+    .replace(/ /g, ' ')                 // non-breaking space -> space
     .trim().toLowerCase()
     .replace(/[֑-ׇ]/g, '')       // Hebrew nikud/te'amim
     .replace(/[.,!?;:"'`״׳]/g, '')          // punctuation & Hebrew gershayim
@@ -77,9 +79,12 @@ function typedMatches(typed: string, answers?: string[]): boolean {
   return answers.some((a) => answerVariants(a).some((x) => tv.includes(x)));
 }
 
-/** Accept reasonable variants of a name: with/without the definite article "ה"
- *  and a leading geographic word (ים/אגם/הר/עיר/נהר). So for a stored answer
- *  "הכנרת", the child's "כנרת" or "ים כנרת" are graded correct too. */
+/** Accept reasonable variants of an answer:
+ *  - names with/without the definite article "ה" and a leading geographic word
+ *    (ים/אגם/הר/עיר/נהר), so "הכנרת" also matches "כנרת" / "ים כנרת";
+ *  - numbers regardless of trailing units, so the bare "40" matches a stored
+ *    "40 סנטימטר מרובע" (and vice versa) - a very common cause of a correct
+ *    numeric answer being marked wrong. */
 function answerVariants(s: string): string[] {
   const n = normalizeAnswer(s);
   if (!n) return [];
@@ -88,6 +93,10 @@ function answerVariants(s: string): string[] {
   out.add(noGeo);
   out.add(noGeo.replace(/^ה/, ''));
   out.add(n.replace(/^ה/, ''));
+  // If the answer contains exactly one number, add the bare number as a variant
+  // so units don't block a correct numeric answer.
+  const nums = n.match(/\d+(?:[.,]\d+)?/g);
+  if (nums && nums.length === 1) out.add(nums[0].replace(',', '.'));
   return [...out].filter(Boolean);
 }
 
