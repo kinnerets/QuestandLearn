@@ -2,6 +2,7 @@ import { getSupabase } from './supabaseClient';
 import { sm2, qualityFrom, updateMastery } from './composer';
 import { SUBJECT_LABEL, SUBJECT_KIND, SENSITIVE_SUBJECTS, subjectsForInterests } from './constants';
 import type { AvatarConfig, StationKind, Subject, DiagramSpec } from './types';
+import englishSeed from './englishSeed.json';
 
 export interface AttemptInput {
   questionId: string;
@@ -459,6 +460,45 @@ export async function adjustChildCoins(childId: string, delta: number): Promise<
     return next;
   } catch {
     return null;
+  }
+}
+
+/** Load Lia's grade-5 English test practice (vocabulary, numbers, months+seasons,
+ *  To Be) into the bank in one tap - so a parent needn't run SQL. Idempotent: a
+ *  topic that already has questions is left untouched. Returns per-topic counts. */
+export async function seedEnglishTest(): Promise<{ ok: boolean; added: { topic: string; inserted: number }[] }> {
+  const sb = getSupabase();
+  if (!sb) return { ok: false, added: [] };
+  try {
+    const seed = englishSeed as {
+      topics: { id: string; sub_topic: string; order_index: number }[];
+      questions: { topic_id: string; type: string; difficulty: number; payload: Record<string, unknown> }[];
+    };
+    // Upsert the topic rows (safe to re-run).
+    await sb.from('curriculum_topics').upsert(
+      seed.topics.map((t) => ({
+        id: t.id, grade: 'grade_5', subject: 'english', sub_topic: t.sub_topic,
+        order_index: t.order_index, arabic_variant: null,
+      })),
+      { onConflict: 'id' },
+    );
+    const added: { topic: string; inserted: number }[] = [];
+    for (const t of seed.topics) {
+      // Skip topics that already have questions, so re-running never duplicates.
+      const { count } = await sb.from('questions_bank')
+        .select('id', { count: 'exact', head: true }).eq('topic_id', t.id);
+      if ((count ?? 0) > 0) { added.push({ topic: t.sub_topic, inserted: 0 }); continue; }
+      const rows = seed.questions.filter((q) => q.topic_id === t.id).map((q) => ({
+        topic_id: q.topic_id, type: q.type, difficulty: q.difficulty,
+        source: 'curated', verification_status: 'auto_passed', payload: q.payload,
+      }));
+      const { error } = await sb.from('questions_bank').insert(rows);
+      added.push({ topic: t.sub_topic, inserted: error ? 0 : rows.length });
+    }
+    _bankCache.delete('grade_5'); // surface the new content immediately
+    return { ok: true, added };
+  } catch {
+    return { ok: false, added: [] };
   }
 }
 

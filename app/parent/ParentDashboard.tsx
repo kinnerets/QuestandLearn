@@ -8,6 +8,7 @@ import { TasksPanel } from './TasksPanel';
 import { TaskApprovalsPanel } from './TaskApprovalsPanel';
 import { SubtopicFocusPanel } from './SubtopicFocusPanel';
 import { CoinAdjustPanel } from './CoinAdjustPanel';
+import { EnglishSeedPanel } from './EnglishSeedPanel';
 import { InterestsViewPanel } from './InterestsViewPanel';
 import { CapiLogPanel } from './CapiLogPanel';
 import { AssessmentsPanel } from './AssessmentsPanel';
@@ -66,6 +67,7 @@ export function ParentDashboard({ kids }: { kids: Kid[] }) {
 
         {/* ── Family-wide management (shared by both girls) ── */}
         <div className="parent-section-label">כללי - לשתי הבנות</div>
+        <EnglishSeedPanel />
         <TasksPanel />
         <RewardsPanel />
         <LocksPanel />
